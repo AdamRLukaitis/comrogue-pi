@@ -1,0 +1,9 @@
+--- COMROGUE 0.00
+- KiSystemStartup
+ATAG @ c0000100: 54410001[5]
+  - flags = 00000000, pgsiz = 0, root = 0
+ATAG @ c0000114: 54410002[4]
+  - memory: 469762048 bytes at physaddr 00000000
+ATAG @ c0000124: 54410009[95]
+  - cmdline: "dma.dmachans=0x7f35 bcm2708_fb.fbwidth=1360 bcm2708_fb.fbheight=768 bcm2708.boardrev=0xf bcm2708.serial=0x3368e8ee smsc95xx.macaddr=B8:27:EB:68:E8:EE sdhci-bcm2708.emmc_clock_freq=100000000 vc_mem.mem_base=0x1ec00000 vc_mem.mem_size=0x20000000  dwc_otg.lpm_enable=0 console=ttyAMA0,115200 kgdboc=ttyAMA0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait"
+ATAG @ c00002a0: 00000000[0]

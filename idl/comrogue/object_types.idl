@@ -1,0 +1,106 @@
+/*
+ * This file is part of the COMROGUE Operating System for Raspberry Pi
+ *
+ * Copyright (c) 2013, Eric J. Bowersox / Erbosoft Enterprises
+ * All rights reserved.
+ *
+ * This program is free for commercial and non-commercial use as long as the following conditions are
+ * adhered to.
+ *
+ * Copyright in this file remains Eric J. Bowersox and/or Erbosoft, and as such any copyright notices
+ * in the code are not to be removed.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted
+ * provided that the following conditions are met:
+ * 
+ * * Redistributions of source code must retain the above copyright notice, this list of conditions and
+ *   the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+ *   the following disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
+ */
+
+/*---------------------------------------------------------
+ * Standard data type declarations for COMROGUE interfaces
+ *---------------------------------------------------------
+ */
+
+[uuid(b381db2c-471e-4288-ba62-878be5ceb393), version(0.1), pointer_default(unique)]
+interface ICOMROGUETypes
+{
+  /* Integral type definitions */
+  typedef int16 INT16;
+  typedef uint16 UINT16;
+  typedef int32 INT32;
+  typedef uint32 UINT32;
+  typedef dlong INT64;
+  typedef udlong UINT64;
+
+  typedef INT32 INT_PTR;
+  typedef UINT32 UINT_PTR;
+
+  /* Base pointer type definitions */
+  typedef INT16 *PINT16;
+  typedef UINT16 *PUINT16;
+  typedef INT32 *PINT32;
+  typedef UINT32 *PUINT32;
+  typedef INT64 *PINT64;
+  typedef UINT64 *PUINT64;
+  typedef void *PVOID;
+  typedef const void *PCVOID;
+
+  /* Pointer-to-pointer definitions */
+  typedef PVOID *PPVOID;
+  
+  /* Character types */
+  typedef char CHAR;
+  typedef uint8 UCHAR;
+  typedef uint8 BYTE;
+
+  typedef CHAR *PCHAR;
+  typedef const CHAR *PCCHAR;
+  typedef UCHAR *PUCHAR;
+  [string] typedef CHAR *PSTR;
+  [string] typedef const CHAR *PCSTR;
+
+  /* Boolean type */
+  typedef int BOOL;
+
+  /* Status code/result types */
+  typedef UINT32 SCODE;
+  typedef SCODE HRESULT;
+
+  /* GUID typedefs */
+  typedef struct tagGUID {
+    UINT32 Data1;
+    UINT16 Data2;
+    UINT16 Data3;
+    BYTE Data4[8];
+  } GUID;
+  typedef GUID IID;
+  typedef GUID CLSID;
+
+  /* The reference types are defined specially so we can use C++ references where necessary */
+  cpp_quote("#if !defined(__cplusplus) || defined(CINTERFACE)")	
+  typedef const GUID *REFGUID;
+  typedef const IID *REFIID;
+  typedef const CLSID *REFCLSID;
+  cpp_quote("#endif")
+}
+
+cpp_quote("#if defined(__cplusplus) && !defined(CINTERFACE)")
+cpp_quote("typedef const GUID& REFGUID;")
+cpp_quote("typedef const IID& REFIID;")
+cpp_quote("typedef const CLSID& REFCLSID;")
+cpp_quote("#endif")
+

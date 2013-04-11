@@ -1,0 +1,6 @@
+Notes regarding the contents of this directory:
+
+pidl
+----
+This utility was taken from the Samba 4 sources (git://git.samba.org/samba.git, subdirectory pidl/) and
+modified for use with COMROGUE.  It and all modifications made to it are distributable under the GNU GPL.
