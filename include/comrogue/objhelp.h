@@ -29,36 +29,28 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
+#ifndef __OBJHELP_H_INCLUDED
+#define __OBJHELP_H_INCLUDED
 
 #ifndef __ASM__
 
-#include <stdarg.h>
-#include <comrogue/types.h>
-#include <comrogue/scode.h>
 #include <comrogue/compiler_macros.h>
-
-/*------------------
- * String functions
- *------------------
- */
-
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
+#include <comrogue/objectbase.h>
+#include <comrogue/allocator.h>
 
 CDECL_BEGIN
 
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
+/* QueryInterface helpers */
+extern HRESULT ObjHlpStandardQueryInterface_IMalloc(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
+/* AddRef/Release helpers */
+extern UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis);
+
+/* Other helpers */
+extern void ObjHlpDoNothingReturnVoid(IUnknown *pThis);
 
 CDECL_END
 
 #endif /* __ASM__ */
 
-#endif /* __STR_H_INCLUDED */
+#endif /* __OBJHELP_H_INCLUDED */

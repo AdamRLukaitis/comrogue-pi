@@ -29,36 +29,23 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
+#ifndef __STDOBJ_H_INCLUDED
+#define __STDOBJ_H_INCLUDED
 
 #ifndef __ASM__
 
-#include <stdarg.h>
-#include <comrogue/types.h>
-#include <comrogue/scode.h>
 #include <comrogue/compiler_macros.h>
-
-/*------------------
- * String functions
- *------------------
- */
-
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
+#include <comrogue/object_types.h>
 
 CDECL_BEGIN
 
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
-
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
+extern BOOL IsEqualGUID(REFGUID guid1, REFGUID guid2);
 
 CDECL_END
 
+#define IsEqualIID(iid1, iid2)        IsEqualGUID(iid1, iid2)
+#define IsEqualCLSID(clsid1, clsid2)  IsEqualGUID(clsid1, clsid2)
+
 #endif /* __ASM__ */
 
-#endif /* __STR_H_INCLUDED */
+#endif /* __STDOBJ_H_INCLUDED */

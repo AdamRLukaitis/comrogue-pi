@@ -29,36 +29,30 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
-
-#ifndef __ASM__
-
-#include <stdarg.h>
 #include <comrogue/types.h>
-#include <comrogue/scode.h>
-#include <comrogue/compiler_macros.h>
+#include <comrogue/internals/seg.h>
+#include <comrogue/internals/mmu.h>
+#include <comrogue/internals/startup.h>
 
-/*------------------
- * String functions
- *------------------
- */
+/* Lists we keep track of various pages on. */
+typedef struct tagPAGELIST {
+  UINT32 ndxLast;                  /* index of last page in list */
+  UINT32 cpg;                      /* count of pages in list */
+} PAGELIST, *PPAGELIST;
 
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
+/* The Master Page Database */
+static PMPDB g_pMasterPageDB = NULL;
 
-CDECL_BEGIN
+/* Individual page lists. */
+//static PAGELIST g_pglFree = { 0, 0 };           /* pages that are free */
+//static PAGELIST g_pglZeroed = { 0, 0 };         /* pages that are free and zeroed */
+//static PAGELIST g_pglStandby = { 0, 0 };        /* pages removed but "in transition" */
+//static PAGELIST g_pglModified = { 0, 0 };       /* pages removed but "in transition" and modified */
+//static PAGELIST g_pglBad = { 0, 0 };            /* bad pages */
 
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
 
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
 
-CDECL_END
-
-#endif /* __ASM__ */
-
-#endif /* __STR_H_INCLUDED */
+SEG_INIT_CODE void _MmInitPageAlloc(PSTARTUP_INFO pstartup)
+{
+  g_pMasterPageDB = (PMPDB)(pstartup->kaMPDB);
+}

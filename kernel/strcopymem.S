@@ -58,14 +58,14 @@
  *
  * Apologies for the state of the comments ;-)
  */
-/* Func: PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, INT32 nBytes); */
+/* Func: PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb); */
 /*
  * Copies memory data from one block of memory to another.  Assumes the memory blocks do NOT overlap.
  *
  * Parameters:
  * - pDest = Destination for the copy operation.
  * - pSrc = Source for the copy operation.
- * - nBytes = Number of bytes to be copied.
+ * - cb = Number of bytes to be copied.
  *
  * Returns:
  * pDest.

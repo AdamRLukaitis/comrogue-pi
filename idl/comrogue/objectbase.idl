@@ -45,6 +45,19 @@ interface IUnknown
   UINT32 Release();
 }
 
+/*-------------------------
+ * IClassFactory interface
+ *-------------------------
+ */
+
+[object, uuid(00000001-0000-0000-C000-000000000046), pointer_default(unique)]
+interface IClassFactory : IUnknown
+{
+  [unique] typedef IClassFactory *PCLASSFACTORY;
+  HRESULT CreateInstance([in, unique] IUnknown *punkOuter, [in] REFIID riid, [out, iid_is(riid)] PPVOID ppvObject);
+  HRESULT LockServer([in] BOOL fLock);
+}
+
 /*----------------------------
  * IServiceProvider interface
  *----------------------------

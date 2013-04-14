@@ -29,36 +29,21 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
-
-#ifndef __ASM__
-
-#include <stdarg.h>
 #include <comrogue/types.h>
-#include <comrogue/scode.h>
-#include <comrogue/compiler_macros.h>
+#include <comrogue/internals/seg.h>
+#include <comrogue/internals/memmgr.h>
+#include <comrogue/internals/startup.h>
 
-/*------------------
- * String functions
- *------------------
+/*---------------------
+ * Initialization code
+ *---------------------
  */
 
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
+extern void _MmInitVMMap(PSTARTUP_INFO pstartup);
+extern void _MmInitPageAlloc(PSTARTUP_INFO pstartup);
 
-CDECL_BEGIN
-
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
-
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
-
-CDECL_END
-
-#endif /* __ASM__ */
-
-#endif /* __STR_H_INCLUDED */
+SEG_INIT_CODE void _MmInit(PSTARTUP_INFO pstartup)
+{
+  _MmInitVMMap(pstartup);
+  _MmInitPageAlloc(pstartup);
+}

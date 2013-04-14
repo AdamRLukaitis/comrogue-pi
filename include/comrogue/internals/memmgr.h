@@ -29,36 +29,33 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
+#ifndef __MEMMGR_H_INCLUDED
+#define __MEMMGR_H_INCLUDED
+
+#ifdef __COMROGUE_INTERNALS__
 
 #ifndef __ASM__
 
-#include <stdarg.h>
 #include <comrogue/types.h>
-#include <comrogue/scode.h>
 #include <comrogue/compiler_macros.h>
-
-/*------------------
- * String functions
- *------------------
- */
-
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
+#include <comrogue/internals/mmu.h>
+#include <comrogue/internals/startup.h>
 
 CDECL_BEGIN
 
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
+/* Page mapping functions */
+extern PHYSADDR MmGetPhysAddr(PTTB pTTB, KERNADDR vma);
+extern HRESULT MmDemapPages(PTTB pTTB, KERNADDR vmaBase, UINT32 cpg);
+extern HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UINT32 uiTableFlags,
+			  UINT32 uiPageFlags);
 
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
+/* Initialization functions only */
+extern void _MmInit(PSTARTUP_INFO pstartup);
 
 CDECL_END
 
 #endif /* __ASM__ */
 
-#endif /* __STR_H_INCLUDED */
+#endif /* __COMROGUE_INTERNALS__ */
+
+#endif /* __MEMMGR_H_INCLUDED */

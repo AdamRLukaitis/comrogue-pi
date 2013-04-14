@@ -48,9 +48,9 @@ AFLAGS = -mcpu=arm1176jzf-s -mfloat-abi=hard
 ASM_CPP_FLAGS = $(INCLUDES) $(DEFS) -D__ASM__
 
 PRESTART_OBJS = prestart.o early_trace.o collect_startup.o early_mm.o
-LIB_OBJS = divide.o qdivrem.o intlib.o str.o strcopymem.o 
-RES_OBJS = lowlevel.o trace.o
-INIT_OBJS = start.o kistart.o
+LIB_OBJS = divide.o qdivrem.o intlib.o objhelp.o str.o strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
+RES_OBJS = lowlevel.o trace.o memmgr.o vmmap.o pagealloc.o
+INIT_OBJS = start.o kistart.o init_heap.o
 
 all:	kernel.img
 

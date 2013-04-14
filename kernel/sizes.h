@@ -29,36 +29,15 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
+#ifndef __SIZES_H_INCLUDED
+#define __SIZES_H_INCLUDED
 
-#ifndef __ASM__
-
-#include <stdarg.h>
-#include <comrogue/types.h>
-#include <comrogue/scode.h>
-#include <comrogue/compiler_macros.h>
-
-/*------------------
- * String functions
- *------------------
+/*-----------------------------------
+ * Sizes of internal data structures
+ *-----------------------------------
  */
 
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
+#define SIZE_INIT_STACK     4096                  /* size of the initial stack */
+#define SIZE_INIT_HEAP      16384                 /* size of the initial heap */
 
-CDECL_BEGIN
-
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
-
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
-
-CDECL_END
-
-#endif /* __ASM__ */
-
-#endif /* __STR_H_INCLUDED */
+#endif /* __SIZES_H_INCLUDED */

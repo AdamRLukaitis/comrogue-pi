@@ -31,6 +31,7 @@
  */
 #include <comrogue/internals/layout.h>
 #include <comrogue/internals/sctlr.h>
+#include "sizes.h"
 	
 .section ".initHEAD.text"
 
@@ -112,6 +113,10 @@ COMROGUEStart:
 #endif
 
 .section ".init.bss"
+	.balign 8
+.globl g_pInitHeapBlock
+g_pInitHeapBlock:
+	.space SIZE_INIT_HEAP
 	.balign 4
-	.space 4096
+	.space SIZE_INIT_STACK
 .initstack:

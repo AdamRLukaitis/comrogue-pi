@@ -29,36 +29,22 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __STR_H_INCLUDED
-#define __STR_H_INCLUDED
-
-#ifndef __ASM__
-
-#include <stdarg.h>
-#include <comrogue/types.h>
-#include <comrogue/scode.h>
-#include <comrogue/compiler_macros.h>
-
-/*------------------
- * String functions
- *------------------
+/*------------------------------------------------------------------------------------------------------
+ * This module defines all the GUIDs as static data that goes into the library segment (i.e. accessible
+ * from both supervisor and user modes).  The following definitions MUST be first in this source file,
+ * AND in this order.
+ *------------------------------------------------------------------------------------------------------
  */
+#include <comrogue/internals/seg.h>
+#define GUIDATTR SEG_LIB_RODATA
+#define INITGUID
+#include <comrogue/object_definition_macros.h>
 
-typedef HRESULT (*PFNFORMAT8)(PPVOID, PCCHAR, UINT32);
-
-CDECL_BEGIN
-
-extern PVOID StrCopyMem(PVOID pDest, PCVOID pSrc, SSIZE_T cb);
-extern INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb);
-extern PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb);
-
-extern BOOL StrIsDigit8(CHAR ch);
-extern INT32 StrLength8(PCSTR psz);
-extern PCHAR StrChar8(PCSTR psz, INT32 ch);
-extern HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs);
-
-CDECL_END
-
-#endif /* __ASM__ */
-
-#endif /* __STR_H_INCLUDED */
+/*-------------------------------------------------------------------------------------------------
+ * Now include all the header files generated from IDL.  Try to include them in the order in which
+ * interfaces are defined.
+ *-------------------------------------------------------------------------------------------------
+ */
+#include <comrogue/object_types.h>
+#include <comrogue/objectbase.h>
+#include <comrogue/allocator.h>

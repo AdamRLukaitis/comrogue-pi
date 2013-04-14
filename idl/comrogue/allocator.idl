@@ -1,0 +1,19 @@
+import "comrogue/objectbase.idl";
+
+/*-------------------
+ * IMalloc interface
+ *-------------------
+ */
+
+[object, uuid(00000002-0000-0000-C000-000000000046)]
+interface IMalloc : IUnknown
+{
+  [unique] typedef IMalloc *PMALLOC;
+  PVOID Alloc([in] SIZE_T cb);
+  PVOID Realloc([in] PVOID pv, [in] SIZE_T cb);
+  void Free([in] PVOID pv);
+  SIZE_T GetSize([in] PVOID pv);
+  INT32 DidAlloc([in] PVOID pv);
+  void HeapMinimize(void);
+}
+

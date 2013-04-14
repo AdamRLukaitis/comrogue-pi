@@ -58,6 +58,7 @@
 #define FACILITY_ITF        4
 #define FACILITY_COMROGUE   7
 #define FACILITY_STRFORMAT  0x333
+#define FACILITY_MEMMGR     0x601
 
 #ifndef __ASM__
 
@@ -79,19 +80,27 @@
 
 #endif /* __ASM__ */
 
-#define S_OK           SCODE_CAST(0x00000000)    /* OK return */
-#define S_FALSE        SCODE_CAST(0x00000001)    /* "False" return */
+/* Basic success codes */
+#define S_OK             SCODE_CAST(0x00000000)    /* OK return */
+#define S_FALSE          SCODE_CAST(0x00000001)    /* "False" return */
 
-#define E_NOTIMPL      SCODE_CAST(0x80000001)    /* not implemented */
-#define E_OUTOFMEMORY  SCODE_CAST(0x80000002)    /* out of memory */
-#define E_INVALIDARG   SCODE_CAST(0x80000003)    /* invalid argument */
-#define E_NOINTERFACE  SCODE_CAST(0x80000004)    /* no such interface */
-#define E_POINTER      SCODE_CAST(0x80000005)    /* invalid pointer */
-#define E_HANDLE       SCODE_CAST(0x80000006)    /* invalid handle */
-#define E_ABORT        SCODE_CAST(0x80000007)    /* aborted operation */
-#define E_FAIL         SCODE_CAST(0x80000008)    /* unspecified failure */
-#define E_ACCESSDENIED SCODE_CAST(0x80000009)    /* access denied */
-#define E_PENDING      SCODE_CAST(0x8000000A)    /* data not yet available */
-#define E_UNEXPECTED   SCODE_CAST(0x8000FFFF)    /* unexpected error */
+/* Basic error codes */
+#define E_NOTIMPL           SCODE_CAST(0x80000001)    /* not implemented */
+#define E_OUTOFMEMORY       SCODE_CAST(0x80000002)    /* out of memory */
+#define E_INVALIDARG        SCODE_CAST(0x80000003)    /* invalid argument */
+#define E_NOINTERFACE       SCODE_CAST(0x80000004)    /* no such interface */
+#define E_POINTER           SCODE_CAST(0x80000005)    /* invalid pointer */
+#define E_HANDLE            SCODE_CAST(0x80000006)    /* invalid handle */
+#define E_ABORT             SCODE_CAST(0x80000007)    /* aborted operation */
+#define E_FAIL              SCODE_CAST(0x80000008)    /* unspecified failure */
+#define E_ACCESSDENIED      SCODE_CAST(0x80000009)    /* access denied */
+#define E_PENDING           SCODE_CAST(0x8000000A)    /* data not yet available */
+#define E_UNEXPECTED        SCODE_CAST(0x8000FFFF)    /* unexpected error */
+
+/* Memory manager error codes */
+#define MEMMGR_E_NOPGTBL    SCODE_CAST(0x86010001)    /* no page tables available */
+#define MEMMGR_E_BADTTBFLG  SCODE_CAST(0x86010002)    /* bad TTB flags encountered */
+#define MEMMGR_E_COLLIDED   SCODE_CAST(0x86010003)    /* memory mapping collided */
+#define MEMMGR_E_ENDTTB     SCODE_CAST(0x86010004)    /* tried to "walk off" end of TTB */
 
 #endif /* __SCODE_H_INCLUDED */

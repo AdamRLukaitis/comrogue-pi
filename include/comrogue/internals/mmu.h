@@ -43,6 +43,7 @@
 #define SYS_PAGE_SIZE       4096          /* standard page size for normal page */
 #define SYS_PAGE_BITS       12            /* log2(SYS_PAGE_SIZE), number of bits in a page address */
 #define SYS_TTB0_SIZE       8192          /* TTB0 must be located on this boundary and is this size */
+#define SYS_TTB0_ENTRIES    2048          /* SYS_TTB0_SIZE/4, number of entries in TTB0 */
 #define SYS_TTB1_SIZE       16384         /* TTB1 must be located on this boundary and is this size */
 #define SYS_TTB1_ENTRIES    4096          /* SYS_TTB1_SIZE/4, number of entries in TTB1 */
 #define SYS_TTB_BITS        12            /* log2(SYS_TTB1_SIZE/4), number of bits in a TTB address */
@@ -123,6 +124,16 @@
 #define PGQUERY_LG          0x00000001    /* large page (64K) */
 #define PGQUERY_SM          0x00000002    /* small page (4K) */
 #define PGQUERY_SM_XN       0x00000003    /* small page with Execute-Never set */
+
+/* Combinations of flags we use regularly. */
+#define TTBFLAGS_LIB_CODE       TTBPGTBL_ALWAYS
+#define PGTBLFLAGS_LIB_CODE     (PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP10)
+#define TTBFLAGS_KERNEL_CODE    TTBPGTBL_ALWAYS
+#define PGTBLFLAGS_KERNEL_CODE  (PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01)
+#define TTBFLAGS_KERNEL_DATA    TTBPGTBL_ALWAYS
+#define PGTBLFLAGS_KERNEL_DATA  (PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01)
+#define TTBFLAGS_MMIO           TTBPGTBL_ALWAYS
+#define PGTBLFLAGS_MMIO         (PGTBLSM_ALWAYS | PGTBLSM_AP01)
 
 #ifndef __ASM__
 
@@ -224,15 +235,20 @@ typedef struct tagPAGETAB {
 
 /* internal structure of a MPDB entry */
 typedef struct tagMPDB1 {
+  PHYSADDR paPTE;                  /* PA of page table entry for the page */
   unsigned next : 20;              /* index of "next" entry in list */
   unsigned tag : 12;               /* page tag */
 } MPDB1;
 
 /* The MPDB entry itself. */
 typedef union tagMPDB {
-  UINT32 raw;                      /* raw data */
+  UINT64 raw;                      /* raw data */
   MPDB1 d;                         /* structured data */
 } MPDB, *PMPDB;
+
+/* Page index macros */
+#define mmPA2PageIndex(pa)      ((pa) >> SYS_PAGE_BITS)
+#define mmPageIndex2PA(ndx)     ((ndx) << SYS_PAGE_BITS)
 
 #endif /* __ASM__ */
 

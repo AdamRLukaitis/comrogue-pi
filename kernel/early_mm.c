@@ -99,7 +99,7 @@ SEG_INIT_CODE static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPag
  * The number of pages that were actually mapped by this function call, or -1 if there was an error in the mapping.
  *
  * Side effects:
- * May modify the ndxTTB'th entry in the TTB, if it was not previously allocated.  May modify the current page
+ * May modify the TTB entry we point to, if it was not previously allocated.  May modify the current page
  * table that the TTB entry points to, where applicable.  If we need to allocate a new page table, may modify the
  * global variables g_cpgForPageTables, g_ctblFreeonLastPage, and g_ptblNext.
  */
@@ -334,7 +334,7 @@ SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
 
   /* Allocate space for the Master Page Database but do not initialize it. */
   pstartup->paMPDB = paTTB + SYS_TTB1_SIZE;
-  cbMPDB = pstartup->cpgSystemTotal << 2;
+  cbMPDB = pstartup->cpgSystemTotal << 3;    /* 8 bytes per entry */
   pstartup->cpgMPDB = cbMPDB >> SYS_PAGE_BITS;
   if (cbMPDB & (SYS_PAGE_SIZE - 1))
   {
@@ -349,34 +349,32 @@ SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
   /* Map the "prestart" area (everything below load address, plus prestart code & data) as identity. */
   VERIFY(map_pages(0, 0, (INT32)(&cpgPrestartTotal), TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_AP01));
   /* Map the IO area as identity. */
-  VERIFY(map_pages(PHYSADDR_IO_BASE, PHYSADDR_IO_BASE, PAGE_COUNT_IO, TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_AP01));
+  VERIFY(map_pages(PHYSADDR_IO_BASE, PHYSADDR_IO_BASE, PAGE_COUNT_IO, TTBFLAGS_MMIO, PGTBLFLAGS_MMIO));
   /* Map the library area. */
   VERIFY(map_pages((PHYSADDR)(&paLibraryCode), (KERNADDR)(&vmaLibraryCode), (INT32)(&cpgLibraryCode),
-                   TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP10));
+                   TTBFLAGS_LIB_CODE, PGTBLFLAGS_LIB_CODE));
   /* Map the kernel code area. */
   VERIFY(map_pages((PHYSADDR)(&paKernelCode), (KERNADDR)(&vmaKernelCode), (INT32)(&cpgKernelCode),
-                   TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01));
+                   TTBFLAGS_KERNEL_CODE, PGTBLFLAGS_KERNEL_CODE));
   /* Map the kernel data/BSS area. */
   VERIFY(map_pages((PHYSADDR)(&paKernelData), (KERNADDR)(&vmaKernelData),
-                   (INT32)(&cpgKernelData) + (INT32)(&cpgKernelBss),
-                   TTBPGTBL_ALWAYS, PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01));
+                   (INT32)(&cpgKernelData) + (INT32)(&cpgKernelBss), TTBFLAGS_KERNEL_DATA, PGTBLFLAGS_KERNEL_DATA));
   /* Map the kernel init code area. */
   VERIFY(map_pages((PHYSADDR)(&paInitCode), (KERNADDR)(&vmaInitCode), (INT32)(&cpgInitCode),
-                   TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01));
+                   TTBFLAGS_KERNEL_CODE, PGTBLFLAGS_KERNEL_CODE));
   /* Map the kernel init data/BSS area. */
   VERIFY(map_pages((PHYSADDR)(&paInitData), (KERNADDR)(&vmaInitData),
-                   (INT32)(&cpgInitData) + (INT32)(&cpgInitBss),
-                   TTBPGTBL_ALWAYS, PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01));
+                   (INT32)(&cpgInitData) + (INT32)(&cpgInitBss), TTBFLAGS_KERNEL_DATA, PGTBLFLAGS_KERNEL_DATA));
   /* Map the TTB itself. */
   pstartup->kaTTB = (KERNADDR)(&vmaFirstFree);
-  VERIFY(map_pages(paTTB, pstartup->kaTTB, SYS_TTB1_SIZE / SYS_PAGE_SIZE, 
-                   TTBPGTBL_ALWAYS, PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01));
+  VERIFY(map_pages(paTTB, pstartup->kaTTB, SYS_TTB1_SIZE / SYS_PAGE_SIZE, TTBFLAGS_KERNEL_DATA,
+		   PGTBLFLAGS_KERNEL_DATA));
   /* Map the Master Page Database. */
   pstartup->kaMPDB = pstartup->kaTTB + SYS_TTB1_SIZE;
-  VERIFY(map_pages(pstartup->paMPDB, pstartup->kaTTB + SYS_TTB1_SIZE, pstartup->cpgMPDB,
-                   TTBPGTBL_ALWAYS, PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01));
+  VERIFY(map_pages(pstartup->paMPDB, pstartup->kaTTB + SYS_TTB1_SIZE, pstartup->cpgMPDB, TTBFLAGS_KERNEL_DATA,
+		   PGTBLFLAGS_KERNEL_DATA));
   /* Map the IO area into high memory as well. */
-  VERIFY(map_pages(PHYSADDR_IO_BASE, VMADDR_IO_BASE, PAGE_COUNT_IO, TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_AP01));
+  VERIFY(map_pages(PHYSADDR_IO_BASE, VMADDR_IO_BASE, PAGE_COUNT_IO, TTBFLAGS_MMIO, PGTBLFLAGS_MMIO));
 
 #if 0
   /* Dump the TTB and page tables to trace output. */
