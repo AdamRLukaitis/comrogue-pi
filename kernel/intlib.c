@@ -29,6 +29,7 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
+#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/intlib.h>
 #include <comrogue/internals/seg.h>

@@ -83,6 +83,8 @@ typedef unsigned long long uint64_t;
 
 #define MAKEBOOL(val) ((val) ? TRUE : FALSE)
 
+#define OFFSETOF(struc, field)   ((UINT_PTR)(&(((struc *)0)->field)))
+
 #ifdef __COMROGUE_INTERNALS__
 
 /* Internal system types */

@@ -90,7 +90,11 @@ CDECL_END
 #if defined(__COMROGUE_PRESTART__) || defined(__COMROGUE_INIT__)
 #define DECLARE_THIS_FILE     static DECLARE_INIT_STRING8_CONST(THIS_FILE, __FILE__);
 #else
+#if defined(__COMROGUE_KERNEL_LIB__)
+#define DECLARE_THIS_FILE     static DECLARE_LIB_STRING8_CONST(THIS_FILE, __FILE__);
+#else
 #define DECLARE_THIS_FILE     static DECLARE_STRING8_CONST(THIS_FILE, __FILE__);
+#endif
 #endif
 
 #define ASSERT(x)     ((x) ? (void)0 : ASSERT_FAIL_FUNC(THIS_FILE, __LINE__))

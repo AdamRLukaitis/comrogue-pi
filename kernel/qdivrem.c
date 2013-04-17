@@ -31,6 +31,7 @@
  * SUCH DAMAGE.
  */
 /* Derived from FreeBSD libkern qdivrem.c, munged by Erbo to COMROGUE standards */
+#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/internals/seg.h>
 #include "quad.h"

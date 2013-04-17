@@ -38,6 +38,11 @@
 
 #include <comrogue/types.h>
 
+/*----------------------
+ * Segment declarations
+ *----------------------
+ */
+
 #ifdef __COMROGUE_PRESTART__
 
 #define SEG_INIT_CODE    __attribute__((__section__(".prestart.text")))
@@ -58,9 +63,15 @@
 
 #endif  /* __COMROGUE_PRESTART__ */
 
-#define DECLARE_INIT_STRING8_CONST(name, value) const CHAR SEG_INIT_RODATA name [] = value
-#define DECLARE_LIB_STRING8_CONST(name, value) const CHAR SEG_LIB_RODATA name [] = value
-#define DECLARE_STRING8_CONST(name, value) const CHAR SEG_RODATA name [] = value
+/*------------------------------------
+ * String constant declaration macros
+ *------------------------------------
+ */
+
+#define DECLARE_STRING8_CONST_STGCLASS(name, value, stgclass) const CHAR stgclass name [] = value
+#define DECLARE_INIT_STRING8_CONST(name, value) DECLARE_STRING8_CONST_STGCLASS(name, value, SEG_INIT_RODATA)
+#define DECLARE_LIB_STRING8_CONST(name, value) DECLARE_STRING8_CONST_STGCLASS(name, value, SEG_LIB_RODATA)
+#define DECLARE_STRING8_CONST(name, value) DECLARE_STRING8_CONST_STGCLASS(name, value, SEG_RODATA)
 
 #endif  /* __ASM__ */
 
