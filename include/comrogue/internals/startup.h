@@ -177,6 +177,8 @@ typedef struct tagSTARTUP_INFO {
   UINT32 cpgSystemTotal;          /* total number of memory pages in the system */
   UINT32 cpgSystemAvail;          /* available memory pages in the system after GPU takes its bite */
   UINT32 cpgTTBGap;               /* number of pages in the "gap" between the end of kernel and TTB */
+  PHYSADDR paTTBAux;              /* physical address of the auxiliary TTB data */
+  KERNADDR kaTTBAux;              /* kernel address of the auxiliary TTB data */
   PHYSADDR paMPDB;                /* physical address of the Master Page Database */
   KERNADDR kaMPDB;                /* kernel address of the Master Page Database */
   UINT32 cpgMPDB;                 /* number of pages we allocated for Master Page Database */

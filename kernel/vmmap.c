@@ -31,18 +31,36 @@
  */
 #include <comrogue/types.h>
 #include <comrogue/scode.h>
+#include <comrogue/allocator.h>
 #include <comrogue/internals/seg.h>
 #include <comrogue/internals/mmu.h>
 #include <comrogue/internals/memmgr.h>
+#include <comrogue/internals/rbtree.h>
 #include <comrogue/internals/startup.h>
+#include <comrogue/internals/trace.h>
+
+#ifdef THIS_FILE
+#undef THIS_FILE
+DECLARE_THIS_FILE
+#endif
+
+/* Tree node storing mapping of physical addresses of page table pages to their kernel addresses */
+typedef struct tagPGTMAP {
+  RBTREENODE rbtn;                   /* tree node structure */
+  KERNADDR kaPGTPage;                /* page table page kernel address */
+  UINT32 uiRefCount;                 /* reference count for mapping */
+} PGTMAP, *PPGTMAP;
 
 #define NMAPFRAMES  4                 /* number of frame mappings */
 
+static PMALLOC g_pMalloc = NULL;      /* allocator used */
 static PTTB g_pttb1 = NULL;           /* pointer to TTB1 */
-static KERNADDR g_kaEndFence = 0;     /* end fence in kernel addresses, after we reserve some */
-static KERNADDR g_kaTableMap[NMAPFRAMES] = { 0 };  /* kernel addresses for page table mappings */
-static PHYSADDR g_paTableMap[NMAPFRAMES] = { 0 };  /* physical addresses for page table mappings */
-static UINT32 g_refTableMap[NMAPFRAMES] = { 0 };   /* reference counts for table mappings */
+static PTTBAUX g_pttb1Aux = NULL;     /* pointer to TTB1 aux data */
+static RBTREE g_rbtPageTables;        /* tree mapping page table PAs to KAs */
+
+/* Forward declaration. */
+static HRESULT map_pages0(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg,
+			  UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags);
 
 /*
  * Maps a page table's page into kernel memory space where we can examine it.
@@ -54,43 +72,41 @@ static UINT32 g_refTableMap[NMAPFRAMES] = { 0 };   /* reference counts for table
  * Pointer to the pagetable in kernel memory, or NULL if we weren't able to map it.
  *
  * Side effects:
- * May modify g_paTableMap and g_refTableMap, and may modify TTB1 if we map a page into memory.
+ * May modify g_rbtPageTables, and may modify TTB1 if we map a page into memory.  May allocate
+ * memory from g_pMalloc.
  */
 static PPAGETAB map_pagetable(PHYSADDR paPageTable)
 {
-  PHYSADDR paOfPage = paPageTable & ~(SYS_PAGE_SIZE - 1);  /* actual page table page's PA */
-  register UINT32 i;   /* loop counter */
+  register PHYSADDR paOfPage = paPageTable & ~(SYS_PAGE_SIZE - 1);  /* actual page table page's PA */
+  register PPGTMAP ppgtmap;
 
-  for (i = 0; i < NMAPFRAMES; i++)
+  ppgtmap = (PPGTMAP)RbtFind(&g_rbtPageTables, (TREEKEY)paOfPage);
+  if (!ppgtmap)
   {
-    if (g_paTableMap[i] == paOfPage)
+    ppgtmap = IMalloc_Alloc(g_pMalloc, sizeof(PGTMAP));
+    ppgtmap->kaPGTPage = _MmAllocKernelAddr(1);
+    ASSERT(ppgtmap->kaPGTPage);
+    if (SUCCEEDED(map_pages0(g_pttb1, g_pttb1Aux, paOfPage, ppgtmap->kaPGTPage, 1, TTBFLAGS_KERNEL_DATA,
+			     PGTBLFLAGS_KERNEL_DATA, PGAUXFLAGS_KERNEL_DATA)))
     {
-      g_refTableMap[i]++;  /* already mapped, return it */
-      goto returnOK;
+      ppgtmap->uiRefCount = 1;
+      rbtNewNode(&(ppgtmap->rbtn), paOfPage);
+      RbtInsert(&g_rbtPageTables, (PRBTREENODE)ppgtmap);
+    }
+    else
+    {
+      _MmFreeKernelAddr(ppgtmap->kaPGTPage, 1);
+      IMalloc_Free(g_pMalloc, ppgtmap);
+      return NULL;
     }
   }
-  
-  for (i = 0; i < NMAPFRAMES; i++)
-  {
-    if (!(g_paTableMap[i]))
-    {
-      g_paTableMap[i] = paOfPage;  /* claim slot and map into it */
-      g_refTableMap[i] = 1;
-      if (FAILED(MmMapPages(g_pttb1, g_paTableMap[i], g_kaTableMap[i], 1, TTBFLAGS_KERNEL_DATA,
-			    PGTBLFLAGS_KERNEL_DATA)))
-      {
-	g_refTableMap[i] = 0;
-	g_paTableMap[i] = 0;
-	return NULL;
-      }
-      break;
-    }
-  }
-  if (i == NMAPFRAMES)
-    return NULL;
-returnOK:
-  return (PPAGETAB)(g_kaTableMap[i] | (paPageTable & (SYS_PAGE_SIZE - 1)));
+  else
+    ppgtmap->uiRefCount++;
+  return (PPAGETAB)(ppgtmap->kaPGTPage | (paPageTable & (SYS_PAGE_SIZE - 1)));
 }
+
+/* Forward declaration. */
+static HRESULT demap_pages0(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg, UINT32 uiFlags);
 
 /*
  * Demaps a page table's page from kernel memory space.
@@ -102,23 +118,24 @@ returnOK:
  * Nothing.
  *
  * Side effects:
- * May modify g_paTableMap and g_refTableMap, and may modify TTB1 if we unmap a page from memory.
+ * May modify g_rbtPageTables, and may modify TTB1 if we unmap a page from memory.  May free
+ * memory in g_pMalloc.
  */
 static void demap_pagetable(PPAGETAB ppgtbl)
 {
-  KERNADDR kaOfPage = ((KERNADDR)ppgtbl) & ~(SYS_PAGE_SIZE - 1);
-  register UINT32 i;   /* loop counter */
+  register PHYSADDR paOfPage;
+  register PPGTMAP ppgtmap;
 
-  for (i = 0; i < NMAPFRAMES; i++)
+  paOfPage = MmGetPhysAddr(g_pttb1, ((KERNADDR)ppgtbl) & ~(SYS_PAGE_SIZE - 1));
+  ppgtmap = (PPGTMAP)RbtFind(&g_rbtPageTables, (TREEKEY)paOfPage);
+  if (ppgtmap)
   {
-    if (g_kaTableMap[i] == kaOfPage)
+    if (--(ppgtmap->uiRefCount) == 0)
     {
-      if (--g_refTableMap[i] == 0)
-      {
-	MmDemapPages(g_pttb1, g_kaTableMap[i], 1);
-	g_paTableMap[i] = 0;
-      }
-      break;
+      RbtDelete(&g_rbtPageTables, (TREEKEY)paOfPage);
+      demap_pages0(g_pttb1, g_pttb1Aux, ppgtmap->kaPGTPage, 1, 0);
+      _MmFreeKernelAddr(ppgtmap->kaPGTPage, 1);
+      IMalloc_Free(g_pMalloc, ppgtmap);
     }
   }
 }
@@ -134,11 +151,29 @@ static void demap_pagetable(PPAGETAB ppgtbl)
  * Returns:
  * The pointer to the selected TTB, which may be the global variable g_pttb1.
  */
-static PTTB resolve_ttb(PTTB pTTB, KERNADDR vma)
+static inline PTTB resolve_ttb(PTTB pTTB, KERNADDR vma)
 {
   if (!pTTB || (vma & 0x80000000))
     return g_pttb1;  /* if no TTB specified or address is out of range for TTB0, use TTB1 */
   return pTTB;
+}
+
+/*
+ * Resolves a specified TTB auxiliary table to either itself or the global TTB1Aux, depending on whether one
+ * was specified and on the virtual address to be worked with.
+ *
+ * Parameters:
+ * - pTTBAux = The specified TTB aux table pointer.
+ * - vma = The base virtual address we're working with.
+ *
+ * Returns:
+ * The pointer to the selected TTB aux table, which may be the global variable g_pttb1Aux.
+ */
+static inline PTTBAUX resolve_ttbaux(PTTBAUX pTTBAux, KERNADDR vma)
+{
+  if (!pTTBAux || (vma & 0x80000000))
+    return g_pttb1Aux;
+  return pTTBAux;
 }
 
 /*
@@ -171,24 +206,29 @@ PHYSADDR MmGetPhysAddr(PTTB pTTB, KERNADDR vma)
   return rc;
 }
 
+/* Flags for demapping. */
+#define DEMAP_NOTHING_SACRED  0x00000001  /* disregard "sacred" flag */
+
 /*
  * Deallocates page mapping entries within a single current entry in the TTB.
  *
  * Parameters:
  * - pTTBEntry = Pointer to the TTB entry to deallocate in.
+ * - pTTBAuxEntry = Pointer to the TTB aux table entry to deallocate in.
  * - ndxPage = Starting index in the page table of the first entry to deallocate.
  * - cpg = Count of the number of pages to deallocate.  Note that this function will not deallocate more
  *         page mapping entries than remain on the page, as indicated by ndxPage.
+ * - uiFlags = Flags for operation.
  *
  * Returns:
  * Standard HRESULT success/failure.  If the result is successful, the SCODE_CODE of the result will
  * indicate the number of pages actually deallocated.
  *
  * Side effects:
- * May modify the TTB entry pointed to, and the page table it points to, where applicable.  If the
+ * May modify the TTB entry/aux entry pointed to, and the page table it points to, where applicable.  If the
  * page table is empty after we finish demapping entries, it may be deallocated.
  */
-static HRESULT demap_pages1(PTTB pTTBEntry, UINT32 ndxPage, UINT32 cpg)
+static HRESULT demap_pages1(PTTB pTTBEntry, PTTBAUX pTTBAuxEntry, UINT32 ndxPage, UINT32 cpg, UINT32 uiFlags)
 {
   UINT32 cpgCurrent;      /* number of pages we're mapping */
   PPAGETAB pTab = NULL;   /* pointer to current or new page table */
@@ -203,7 +243,10 @@ static HRESULT demap_pages1(PTTB pTTBEntry, UINT32 ndxPage, UINT32 cpg)
 
   if ((pTTBEntry->data & TTBSEC_ALWAYS) && (cpgCurrent == SYS_PGTBL_ENTRIES) && (ndxPage == 0))
   { /* we can kill off the whole section */
+    if (pTTBAuxEntry->aux.sacred && !(uiFlags & DEMAP_NOTHING_SACRED))
+      return MEMMGR_E_NOSACRED;  /* can't demap a sacred mapping */
     pTTBEntry->data = 0;
+    pTTBAuxEntry->data = 0;
     /* TODO: handle TLB and cache */
   }
   else if (pTTBEntry->data & TTBPGTBL_ALWAYS)
@@ -213,20 +256,28 @@ static HRESULT demap_pages1(PTTB pTTBEntry, UINT32 ndxPage, UINT32 cpg)
       return MEMMGR_E_NOPGTBL;
     for (i = 0; i<cpgCurrent; i++)
     {
+      if (pTab->pgaux[ndxPage + i].aux.sacred && !(uiFlags & DEMAP_NOTHING_SACRED))
+      { /* can't demap a sacred mapping */
+	hr = MEMMGR_E_NOSACRED;
+	goto pageError;
+      }
+    }
+    for (i = 0; i<cpgCurrent; i++)
+    {
       pTab->pgtbl[ndxPage + i].data = 0;
       pTab->pgaux[ndxPage + i].data = 0;
       /* TODO: handle TLB and cache */
     }
     /* TODO: check to see if page table can be deallocated */
+pageError:
     demap_pagetable(pTab);
   }
   return hr;
 }
 
-HRESULT MmDemapPages(PTTB pTTB, KERNADDR vmaBase, UINT32 cpg)
+static HRESULT demap_pages0(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg, UINT32 uiFlags)
 {
-  PTTB pMyTTB = resolve_ttb(pTTB, vmaBase);     /* the TTB we use */
-  UINT32 ndxTTBMax = (pMyTTB == g_pttb1) ? SYS_TTB1_ENTRIES : SYS_TTB0_ENTRIES;
+  UINT32 ndxTTBMax = (pTTB == g_pttb1) ? SYS_TTB1_ENTRIES : SYS_TTB0_ENTRIES;
   UINT32 ndxTTB = mmVMA2TTBIndex(vmaBase);      /* TTB entry index */
   UINT32 ndxPage = mmVMA2PGTBLIndex(vmaBase);   /* starting page entry index */
   UINT32 cpgRemaining = cpg;                    /* number of pages remaining to demap */
@@ -235,7 +286,7 @@ HRESULT MmDemapPages(PTTB pTTB, KERNADDR vmaBase, UINT32 cpg)
   if ((cpgRemaining > 0) && (ndxPage > 0))
   {
     /* We are starting in the middle of a VM page.  Demap to the end of the VM page. */
-    hr = demap_pages1(pMyTTB + ndxTTB, ndxPage, cpgRemaining);
+    hr = demap_pages1(pTTB + ndxTTB, pTTBAux + ndxTTB, ndxPage, cpgRemaining, uiFlags);
     if (FAILED(hr))
       return hr;
     cpgRemaining -= SCODE_CODE(hr);
@@ -245,7 +296,7 @@ HRESULT MmDemapPages(PTTB pTTB, KERNADDR vmaBase, UINT32 cpg)
 
   while (cpgRemaining > 0)
   {
-    hr = demap_pages1(pMyTTB + ndxTTB, 0, cpgRemaining);
+    hr = demap_pages1(pTTB + ndxTTB, pTTBAux + ndxTTB, 0, cpgRemaining, uiFlags);
     if (FAILED(hr))
       return hr;
     cpgRemaining -= SCODE_CODE(hr);
@@ -253,6 +304,11 @@ HRESULT MmDemapPages(PTTB pTTB, KERNADDR vmaBase, UINT32 cpg)
       return MEMMGR_E_ENDTTB;
   }
   return S_OK;
+}
+
+HRESULT MmDemapPages(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg)
+{
+  return demap_pages0(resolve_ttb(pTTB, vmaBase), resolve_ttbaux(pTTBAux, vmaBase), vmaBase, cpg, 0);
 }
 
 /*
@@ -285,8 +341,44 @@ static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPageFlags)
   return rc;
 }
 
-static HRESULT map_pages1(PTTB pttbEntry, PHYSADDR paBase, UINT32 ndxPage, UINT32 cpg, UINT32 uiTableFlags,
-			   UINT32 uiPageFlags)
+/*
+ * Morphs the "auxiliary flags" bits used for a page table entry into "auxiliary flags" used for a TTB entry.
+ *
+ * Parameters:
+ * - uiPageAuxFlags = Page auxiliary flag bits that would be used for a page table entry.
+ *
+ * Returns:
+ * TTB auxiliary flag bits that would be used for a TTB entry.
+ */
+static UINT32 make_section_aux_flags(UINT32 uiPageAuxFlags)
+{
+  register UINT32 rc = uiPageAuxFlags & (PGAUX_SACRED);
+  /* TODO if we define any other flags */
+  return rc;
+}
+
+static PPAGETAB alloc_page_table(PTTB pttbEntry, PTTBAUX pttbAuxEntry, UINT32 uiTableFlags)
+{
+  PPAGETAB pTab = NULL;   /* new page table pointer */
+  register INT32 i;       /* loop counter */
+
+  /* TODO: pull pTab out of our ass somewhere */
+  if (pTab)
+  {
+    for (i=0; i<SYS_PGTBL_ENTRIES; i++)
+    {
+      pTab->pgtbl[i].data = 0;  /* blank out the new page table */
+      pTab->pgaux[i].data = 0;
+    }
+    /* TODO: use physical address of page here */
+    pttbEntry->data = MmGetPhysAddr(g_pttb1, (KERNADDR)pTab) | uiTableFlags;  /* poke new entry */
+    pttbAuxEntry->data = TTBAUXFLAGS_PAGETABLE;
+  }
+  return pTab;
+}
+
+static HRESULT map_pages1(PTTB pttbEntry, PTTBAUX pttbAuxEntry, PHYSADDR paBase, UINT32 ndxPage, UINT32 cpg,
+			  UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags)
 {
   UINT32 cpgCurrent;      /* number of pages we're mapping */
   PPAGETAB pTab = NULL;   /* pointer to current or new page table */
@@ -296,16 +388,9 @@ static HRESULT map_pages1(PTTB pttbEntry, PHYSADDR paBase, UINT32 ndxPage, UINT3
   switch (pttbEntry->data & TTBQUERY_MASK)
   {
     case TTBQUERY_FAULT:   /* not allocated, allocate a new page table for the slot */
-      /* TODO: allocate something into pTab */
+      pTab = alloc_page_table(pttbEntry, pttbAuxEntry, uiTableFlags);
       if (!pTab)
 	return MEMMGR_E_NOPGTBL;
-      for (i=0; i<SYS_PGTBL_ENTRIES; i++)
-      {
-	pTab->pgtbl[i].data = 0;  /* blank out the new page table */
-	pTab->pgaux[i].data = 0;
-      }
-      /* TODO: use physical address of page here */
-      pttbEntry->data = MmGetPhysAddr(g_pttb1, (KERNADDR)pTab) | uiTableFlags;  /* poke new entry */
       break;
 
     case TTBQUERY_PGTBL:    /* existing page table */
@@ -321,8 +406,11 @@ static HRESULT map_pages1(PTTB pttbEntry, PHYSADDR paBase, UINT32 ndxPage, UINT3
       /* this is a section, make sure its base address covers this mapping and its flags are compatible */
       if ((pttbEntry->data & TTBSEC_ALLFLAGS) != make_section_flags(uiTableFlags, uiPageFlags))
 	return MEMMGR_E_BADTTBFLG;
+      if (pttbAuxEntry->data != make_section_aux_flags(uiAuxFlags))
+	return MEMMGR_E_BADTTBFLG;
       if ((pttbEntry->data & TTBSEC_BASE) != (paBase & TTBSEC_BASE))
 	return MEMMGR_E_COLLIDED;
+      pTab = NULL;
       break;
   }
 
@@ -332,9 +420,8 @@ static HRESULT map_pages1(PTTB pttbEntry, PHYSADDR paBase, UINT32 ndxPage, UINT3
     cpgCurrent = cpg;     /* only map up to max requested */
   hr = MAKE_SCODE(SEVERITY_SUCCESS, FACILITY_MEMMGR, cpgCurrent);
 
-  if (!(pttbEntry->data & TTBSEC_ALWAYS))
-  {
-    /* fill in entries in the page table */
+  if (pTab)
+  { /* fill in entries in the page table */
     for (i=0; i < cpgCurrent; i++)
     {
       if ((pTab->pgtbl[ndxPage + i].data & PGQUERY_MASK) != PGQUERY_FAULT)
@@ -348,7 +435,7 @@ static HRESULT map_pages1(PTTB pttbEntry, PHYSADDR paBase, UINT32 ndxPage, UINT3
 	goto exit;
       }
       pTab->pgtbl[ndxPage + i].data = paBase | uiPageFlags;
-      pTab->pgaux[ndxPage + i].data = 0; /* TODO */
+      pTab->pgaux[ndxPage + i].data = uiAuxFlags;
       paBase += SYS_PAGE_SIZE;
     }
   }
@@ -357,11 +444,10 @@ exit:
   return hr;
 }
 
-HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UINT32 uiTableFlags,
-		   UINT32 uiPageFlags)
+static HRESULT map_pages0(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg,
+			  UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags)
 {
-  PTTB pMyTTB = resolve_ttb(pTTB, vmaBase);     /* the TTB we use */
-  UINT32 ndxTTBMax = (pMyTTB == g_pttb1) ? SYS_TTB1_ENTRIES : SYS_TTB0_ENTRIES;
+  UINT32 ndxTTBMax = (pTTB == g_pttb1) ? SYS_TTB1_ENTRIES : SYS_TTB0_ENTRIES;
   UINT32 ndxTTB = mmVMA2TTBIndex(vmaBase);      /* TTB entry index */
   UINT32 ndxPage = mmVMA2PGTBLIndex(vmaBase);   /* starting page entry index */
   UINT32 cpgRemaining = cpg;                    /* number of pages remaining to map */
@@ -370,7 +456,8 @@ HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UIN
   if ((cpgRemaining > 0) && (ndxPage > 0))
   {
     /* We are starting in the middle of a VM page.  Map to the end of the VM page. */
-    hr = map_pages1(pMyTTB + ndxTTB, paBase, ndxPage, cpgRemaining, uiTableFlags, uiPageFlags);
+    hr = map_pages1(pTTB + ndxTTB, pTTBAux + ndxTTB, paBase, ndxPage, cpgRemaining, uiTableFlags,
+		    uiPageFlags, uiAuxFlags);
     if (FAILED(hr))
       return hr;
     cpgRemaining -= SCODE_CODE(hr);
@@ -388,10 +475,11 @@ HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UIN
     if ((paBase & TTBSEC_BASE) == paBase)
     {
       /* paBase is section-aligned now as well, we can use a direct 1Mb section mapping */
-      switch (pMyTTB[ndxTTB].data & TTBQUERY_MASK)
+      switch (pTTB[ndxTTB].data & TTBQUERY_MASK)
       {
 	case TTBQUERY_FAULT:   /* unmapped - map the section */
-	  pMyTTB[ndxTTB].data = paBase | make_section_flags(uiTableFlags, uiPageFlags);
+	  pTTB[ndxTTB].data = paBase | make_section_flags(uiTableFlags, uiPageFlags);
+	  pTTBAux[ndxTTB].data = make_section_aux_flags(uiAuxFlags);
 	  break;
 
 	case TTBQUERY_PGTBL:   /* collided with a page table */
@@ -400,12 +488,17 @@ HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UIN
 
 	case TTBQUERY_SEC:     /* test existing section */
 	case TTBQUERY_PXNSEC:
-	  if ((pMyTTB[ndxTTB].data & TTBSEC_ALLFLAGS) != make_section_flags(uiTableFlags, uiPageFlags))
+	  if ((pTTB[ndxTTB].data & TTBSEC_ALLFLAGS) != make_section_flags(uiTableFlags, uiPageFlags))
 	  {
 	    hr = MEMMGR_E_BADTTBFLG;
 	    goto errorExit;
 	  }
-	  if ((pMyTTB[ndxTTB].data & TTBSEC_BASE) != paBase)
+	  if (pTTBAux[ndxTTB].data != make_section_aux_flags(uiAuxFlags))
+	  {
+	    hr = MEMMGR_E_BADTTBFLG;
+	    goto errorExit;
+	  }
+	  if ((pTTB[ndxTTB].data & TTBSEC_BASE) != paBase)
 	  {
 	    hr = MEMMGR_E_COLLIDED;
 	    goto errorExit;
@@ -418,7 +511,7 @@ HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UIN
     else
     {
       /* just map 256 individual pages */
-      hr = map_pages1(pMyTTB + ndxTTB, paBase, 0, cpgRemaining, uiTableFlags, uiPageFlags);
+      hr = map_pages1(pTTB + ndxTTB, pTTBAux + ndxTTB, paBase, 0, cpgRemaining, uiTableFlags, uiPageFlags, uiAuxFlags);
       if (FAILED(hr))
 	goto errorExit;
     }
@@ -435,14 +528,52 @@ HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UIN
   if (cpgRemaining > 0)
   {
     /* map the "tail end" onto the next TTB */
-    hr = map_pages1(pMyTTB + ndxTTB, paBase, 0, cpgRemaining, uiTableFlags, uiPageFlags);
+    hr = map_pages1(pTTB + ndxTTB, pTTBAux + ndxTTB, paBase, 0, cpgRemaining, uiTableFlags, uiPageFlags, uiAuxFlags);
     if (FAILED(hr))
       goto errorExit;
   }
   return S_OK;
 errorExit:
   /* demap everything we've managed to map thusfar */
-  MmDemapPages(pMyTTB, vmaBase, cpg - cpgRemaining);
+  demap_pages0(pTTB, pTTBAux, vmaBase, cpg - cpgRemaining, DEMAP_NOTHING_SACRED);
+  return hr;
+}
+
+HRESULT MmMapPages(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UINT32 uiTableFlags,
+		   UINT32 uiPageFlags, UINT32 uiAuxFlags)
+{
+  return map_pages0(resolve_ttb(pTTB, vmaBase), resolve_ttbaux(pTTBAux, vmaBase), paBase, vmaBase, cpg,
+		    uiTableFlags, uiPageFlags, uiAuxFlags);
+}
+
+HRESULT MmMapKernelPages(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, UINT32 cpg, UINT32 uiTableFlags,
+			 UINT32 uiPageFlags, UINT32 uiAuxFlags, PKERNADDR pvmaLocation)
+{
+  register HRESULT hr;
+
+  if (!pvmaLocation)
+    return E_POINTER;
+  *pvmaLocation = _MmAllocKernelAddr(cpg);
+  if (!(*pvmaLocation))
+    return MEMMGR_E_NOKERNSPC;
+  hr = MmMapPages(pTTB, pTTBAux, paBase, *pvmaLocation, cpg, uiTableFlags, uiPageFlags, uiAuxFlags);
+  if (FAILED(hr))
+  {
+    _MmFreeKernelAddr(*pvmaLocation, cpg);
+    *pvmaLocation = NULL;
+  }
+  return hr;
+}
+
+HRESULT MmDemapKernelPages(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg)
+{
+  register HRESULT hr;
+
+  if ((vmaBase & 0xC0000000) != 0xC0000000)
+    return E_INVALIDARG;
+  hr = MmDemapPages(pTTB, pTTBAux, vmaBase, cpg);
+  if (SUCCEEDED(hr))
+    _MmFreeKernelAddr(vmaBase, cpg);
   return hr;
 }
 
@@ -451,15 +582,11 @@ errorExit:
  *---------------------
  */
 
-SEG_INIT_CODE void _MmInitVMMap(PSTARTUP_INFO pstartup)
+SEG_INIT_CODE void _MmInitVMMap(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap)
 {
-  UINT32 i;   /* loop counter */
-
+  g_pMalloc = pmInitHeap;
+  IUnknown_AddRef(g_pMalloc);
   g_pttb1 = (PTTB)(pstartup->kaTTB);
-  g_kaEndFence = pstartup->vmaFirstFree;
-  for (i=0; i<NMAPFRAMES; i++)
-  {
-    g_kaTableMap[i] = g_kaEndFence;
-    g_kaEndFence += SYS_PAGE_SIZE;
-  }
+  g_pttb1Aux = (PTTBAUX)(pstartup->kaTTBAux);
+  rbtInitTree(&g_rbtPageTables, RbtStdCompareByValue);
 }

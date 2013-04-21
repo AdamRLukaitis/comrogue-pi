@@ -43,11 +43,18 @@
 
 CDECL_BEGIN
 
+/* Kernel address space functions */
+extern KERNADDR _MmAllocKernelAddr(UINT32 cpgNeeded);
+extern void _MmFreeKernelAddr(KERNADDR kaBase, UINT32 cpgToFree);
+
 /* Page mapping functions */
 extern PHYSADDR MmGetPhysAddr(PTTB pTTB, KERNADDR vma);
-extern HRESULT MmDemapPages(PTTB pTTB, KERNADDR vmaBase, UINT32 cpg);
-extern HRESULT MmMapPages(PTTB pTTB, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg, UINT32 uiTableFlags,
-			  UINT32 uiPageFlags);
+extern HRESULT MmDemapPages(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg);
+extern HRESULT MmMapPages(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg,
+			  UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags);
+extern HRESULT MmMapKernelPages(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, UINT32 cpg, UINT32 uiTableFlags,
+				UINT32 uiPageFlags, UINT32 uiAuxFlags, PKERNADDR pvmaLocation);
+extern HRESULT MmDemapKernelPages(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg);
 
 /* Initialization functions only */
 extern void _MmInit(PSTARTUP_INFO pstartup);

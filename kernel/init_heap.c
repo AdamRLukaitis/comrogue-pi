@@ -30,6 +30,7 @@
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
 #include <comrogue/types.h>
+#include <comrogue/intlib.h>
 #include <comrogue/str.h>
 #include <comrogue/allocator.h>
 #include <comrogue/objhelp.h>
@@ -60,6 +61,8 @@ typedef struct tagINITHEAP
   IMalloc hdr;                    /* object header must be first */
   BLOCK blkBase;                  /* base "zero" block */
   PBLOCK pblkLastAlloc;           /* last allocated block */
+  UINT32 cbAlloc;                 /* number of bytes currently allocated */
+  UINT32 cbAllocHiWat;            /* high watermark for bytes currently allocated */
 } INITHEAP, *PINITHEAP;
 
 /*
@@ -92,6 +95,9 @@ SEG_INIT_CODE static PVOID init_heap_Alloc(IMalloc *pThis, SIZE_T cb)
 	p->data.cblk = nBlocks;
       }
       pih->pblkLastAlloc = q;
+      pih->cbAlloc += (nBlocks * sizeof(BLOCK));
+      if (pih->cbAlloc > pih->cbAllocHiWat)
+	pih->cbAllocHiWat = pih->cbAlloc;
       return (PVOID)(p + 1);
     }
     if (p == pih->pblkLastAlloc)
@@ -137,10 +143,12 @@ SEG_INIT_CODE static void init_heap_Free(IMalloc *pThis, PVOID pv)
 {
   PINITHEAP pih = (PINITHEAP)pThis;
   register PBLOCK p, q;
+  register UINT32 nBlocks;
 
   if (init_heap_DidAlloc(pThis, pv) != 1)
     return;  /* not our business */
   p = ((PBLOCK)pv) - 1;
+  nBlocks = p->data.cblk;
   for (q = pih->pblkLastAlloc; !((p > q) && (p < q->data.pNextFree)); q = q->data.pNextFree)
     if ((q >= q->data.pNextFree) && ((p > q) || (p < q->data.pNextFree)))
       break;    /* at one end or another */
@@ -161,6 +169,7 @@ SEG_INIT_CODE static void init_heap_Free(IMalloc *pThis, PVOID pv)
   else
     q->data.pNextFree = p;  /* chain to previous free block */
   pih->pblkLastAlloc = q;
+  pih->cbAlloc -= (nBlocks * sizeof(BLOCK));
 }
 
 /*
@@ -182,6 +191,7 @@ SEG_INIT_CODE static PVOID init_heap_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb
   PINITHEAP pih = (PINITHEAP)pThis;
   SIZE_T nBlocksNew, nBlocksExtra;
   PVOID pNew;
+  UINT32 cbHiWatSave;
   register PBLOCK p, pNext, q, qp;
 
   /* Handle degenerate cases */
@@ -205,7 +215,7 @@ SEG_INIT_CODE static PVOID init_heap_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb
     pNext = p + nBlocksNew;
     pNext->data.cblk = p->data.cblk - nBlocksNew;
     p->data.cblk = nBlocksNew;
-    init_heap_Free(pThis, (PVOID)(pNext + 1));
+    init_heap_Free(pThis, (PVOID)(pNext + 1));  /* adjusts cbAlloc */
     return pv;
   }
 
@@ -220,6 +230,7 @@ SEG_INIT_CODE static PVOID init_heap_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb
       if (q->data.cblk < nBlocksExtra)
 	break;  /* cannot get enough blocks by combining next free block */
       qp->data.pNextFree = q->data.pNextFree; /* remove block from free list */
+      pih->cbAlloc += (q->data.cblk * sizeof(BLOCK));  /* act like we allocated it all for the nonce */
       if (q->data.cblk == nBlocksExtra)
       { /* take it all */
 	pih->pblkLastAlloc = qp->data.pNextFree;
@@ -228,9 +239,11 @@ SEG_INIT_CODE static PVOID init_heap_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb
       { /* chop in two, add first block to existing, free second block */
 	pNext += nBlocksExtra;
 	pNext->data.cblk = q->data.cblk - nBlocksExtra;
-	init_heap_Free(pThis, (PVOID)(pNext + 1));
+	init_heap_Free(pThis, (PVOID)(pNext + 1)); /* also fixes cbAlloc */
       }
       p->data.cblk = nBlocksNew;
+      if (pih->cbAlloc > pih->cbAllocHiWat)
+	pih->cbAllocHiWat = pih->cbAlloc;
       return pv;
     }
     if (q == pih->pblkLastAlloc)
@@ -238,11 +251,13 @@ SEG_INIT_CODE static PVOID init_heap_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb
   }
 
   /* last ditch effort: allocate new block and copy old contents in */
+  cbHiWatSave = pih->cbAllocHiWat;
   pNew = init_heap_Alloc(pThis, cb);
   if (!pNew)
     return NULL;   /* cannot reallocate */
   StrCopyMem(pv, pNew, (p->data.cblk - 1) * sizeof(BLOCK));
   init_heap_Free(pThis, pv);
+  pih->cbAllocHiWat = intMax(cbHiWatSave, pih->cbAlloc);
   return pNew;
 }
 
@@ -303,6 +318,7 @@ SEG_INIT_CODE IMalloc *_MmGetInitHeap(void)
     p = (PBLOCK)g_pInitHeapBlock;
     p->data.cblk = SIZE_INIT_HEAP / sizeof(BLOCK);
     init_heap_Free((IMalloc *)(&initheap), (PVOID)(p + 1));
+    initheap.cbAlloc = initheap.cbAllocHiWat = 0;  /* start from zero now */
   }
   return (IMalloc *)(&initheap);
 }

@@ -232,10 +232,10 @@ sub ParseInterface($)
 	my $args = GetArgumentList($d);
 	if (defined($args)) {
 	    $res .= "#define $if->{NAME}_$d->{NAME}(pInterface, $args) \\\n";
-	    $res .= "\t(*((pInterface)->pVTable->$d->{NAME}))(pInterface, $args)\n";
+	    $res .= "\t(*((pInterface)->pVTable->$d->{NAME}))(($if->{NAME} *)(pInterface), $args)\n";
 	} else {
 	    $res .= "#define $if->{NAME}_$d->{NAME}(pInterface) \\\n";
-	    $res .= "\t(*((pInterface)->pVTable->$d->{NAME}))(pInterface)\n";
+	    $res .= "\t(*((pInterface)->pVTable->$d->{NAME}))(($if->{NAME} *)(pInterface))\n";
 	}
     }
 

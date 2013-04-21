@@ -45,7 +45,8 @@
 #define VMADDR_LIBRARY_FENCE     0xB0000000           /* base address for kernel "shared library" code */
 #define VMADDR_KERNEL_FENCE      0xC0000000           /* base address for the internal kernel code */
 #define VMADDR_IO_BASE           0xE0000000           /* base address for memory-mapped IO */
-#define PAGE_COUNT_IO            1024                 /* 4 megabytes mapped for IO */
+#define PAGE_COUNT_IO            4096                 /* 16 megabytes mapped for IO */
+#define VMADDR_KERNEL_NOMANS     0xFFFF0000           /* start of kernel "no man's land" */
 
 #endif /* __COMROGUE_INTERNALS__ */
 

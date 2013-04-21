@@ -97,7 +97,7 @@ SEG_LIB_CODE static PRBTREENODE rotate_left(PRBTREENODE ptn)
  * The new root node inherits the former root node's color, and the former root node turns red.
  *
  * Parameters:
- * - ptn = Pointer to theroot node of the subtree.
+ * - ptn = Pointer to the root node of the subtree.
  *
  * Returns:
  * Pointer to the new root node of the subtree after the rotation.
@@ -230,6 +230,76 @@ SEG_LIB_CODE PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key)
 }
 
 /*
+ * Given a key, returns either the node that matches the key, if the key is in the tree, or the node
+ * that has a key that most immediately precedes the supplied key.  An O(log n) operation.
+ *
+ * Parameters:
+ * - ptree = Pointer to the tree head structure.
+ * - key = Key value to be looked up.
+ *
+ * Returns:
+ * Pointer to the node where the key is found, or pointer to the predecessor node, or NULL if the key
+ * is less than every key in the tree and hence has no predecessor.
+ */
+SEG_LIB_CODE PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
+{
+  register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
+  register int cmp;  /* compare result */
+
+  while (ptn)
+  {
+    cmp = (*(ptree->pfnTreeCompare))(key, ptn->treekey);
+    if (cmp == 0)
+      break;  /* found */
+    else if (cmp > 0)
+    {
+      if (rbtNodeRight(ptn))
+	ptn = rbtNodeRight(ptn);
+      else
+	break;  /* found predecessor */
+    }
+    else
+      ptn = ptn->ptnLeft;
+  }
+  return ptn;
+}
+
+/*
+ * Given a key, returns either the node that matches the key, if the key is in the tree, or the node
+ * that has a key that most immediately succeeds the supplied key.  An O(log n) operation.
+ *
+ * Parameters:
+ * - ptree = Pointer to the tree head structure.
+ * - key = Key value to be looked up.
+ *
+ * Returns:
+ * Pointer to the node where the key is found, or pointer to the successor node, or NULL if the key
+ * is greater than every key in the tree and hence has no successor.
+ */
+SEG_LIB_CODE PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key)
+{
+  register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
+  register int cmp;  /* compare result */
+
+  while (ptn)
+  {
+    cmp = (*(ptree->pfnTreeCompare))(key, ptn->treekey);
+    if (cmp == 0)
+      break;  /* found */
+    else if (cmp < 0)
+    {
+      if (ptn->ptnLeft)
+	ptn = ptn->ptnLeft;
+      else
+	break;  /* found successor */
+    }
+    else
+      ptn = rbtNodeRight(ptn);
+  }
+  return ptn;
+}
+
+/*
  * Finds the "minimum" node in the subtree (the one at the bottom end of the left spine of the subtree).
  *
  * Parameters:
@@ -246,7 +316,7 @@ SEG_LIB_CODE static PRBTREENODE find_min(PRBTREENODE ptn)
 }
 
 /*
- * Finds the "minimum" node int he tree (the one at the bottom end of the left spine of the tree).
+ * Finds the "minimum" node in the tree (the one at the bottom end of the left spine of the tree).
  *
  * Parameters:
  * - ptree = Pointer to the tree head structure.
@@ -327,7 +397,8 @@ SEG_LIB_CODE static PRBTREENODE delete_min(PRBTREENODE ptn)
 }
 
 /*
- * Detetes the node in the subtree having an arbitrary key.  An O(log n) operation.
+ * Deletes the node in the subtree having an arbitrary key. (Note that "deletes" means "removes from the tree."
+ * No memory delete operation is actually performed.) An O(log n) operation.
  *
  * Parameters:
  * - ptree = Pointer to the tree head structure, containing the compare function.
@@ -386,7 +457,8 @@ SEG_LIB_CODE static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptn
 }
 
 /*
- * Detetes the node in the tree having an arbitrary key.  An O(log n) operation.
+ * Deletes the node in the tree having an arbitrary key. (Note that "deletes" means "removes from the tree."
+ * No memory delete operation is actually performed.) An O(log n) operation.
  *
  * Parameters:
  * - ptree = Pointer to the tree head structure.
@@ -400,4 +472,50 @@ SEG_LIB_CODE void RbtDelete(PRBTREE ptree, TREEKEY key)
   ptree->ptnRoot = delete_from_under(ptree, ptree->ptnRoot, key);
   if (ptree->ptnRoot)
     rbtSetNodeColor(ptree->ptnRoot, BLACK);
+}
+
+/*
+ * Performs an inorder traversal of the tree rooted at the specified node. An O(n) operation.
+ *
+ * Parameters:
+ * - ptree = Pointer to the tree head structure.
+ * - ptn = Pointer to the root of the current tree node.
+ * - pfnWalk = Pointer to a function called for each tree node we encounter.  This function returns TRUE
+ *             to continue the traversal or FALSE to stop it.
+ * - pData = Arbitrary data pointer that gets passed to the pfnWalk function.
+ *
+ * Returns:
+ * TRUE if the tree was entirely traversed, FALSE if the tree walk was interrupted.
+ *
+ * N.B.:
+ * This function is recursive; however, the nature of the tree guarantees that the stack space consumed
+ * by its stack frames will be O(log n).
+ */
+SEG_LIB_CODE static BOOL do_walk(PRBTREE ptree, PRBTREENODE ptn, PFNRBTWALK pfnWalk, PVOID pData)
+{
+  register BOOL rc = TRUE;
+  if (ptn->ptnLeft)
+    rc = do_walk(ptree, ptn->ptnLeft, pfnWalk, pData);
+  if (rc)
+    rc = (*pfnWalk)(ptree, ptn, pData);
+  if (rc && rbtNodeRight(ptn))
+    rc = do_walk(ptree, rbtNodeRight(ptn), pfnWalk, pData);
+  return rc;
+}
+
+/*
+ * Performs an inorder traversal of the tree.  An O(n) operation.
+ *
+ * Parameters:
+ * - ptree = Pointer to the tree head structure.
+ * - pfnWalk = Pointer to a function called for each tree node we encounter.  This function returns TRUE
+ *             to continue the traversal or FALSE to stop it.
+ * - pData = Arbitrary data pointer that gets passed to the pfnWalk function.
+ *
+ * Returns:
+ * TRUE if the tree was entirely traversed, FALSE if the tree walk was interrupted.
+ */
+SEG_LIB_CODE BOOL RbtWalk(PRBTREE ptree, PFNRBTWALK pfnWalk, PVOID pData)
+{
+  return (ptree->ptnRoot ? do_walk(ptree, ptree->ptnRoot, pfnWalk, pData) : TRUE);
 }

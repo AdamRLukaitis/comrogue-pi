@@ -49,7 +49,7 @@ ASM_CPP_FLAGS = $(INCLUDES) $(DEFS) -D__ASM__
 
 PRESTART_OBJS = prestart.o early_trace.o collect_startup.o early_mm.o
 LIB_OBJS = divide.o qdivrem.o intlib.o objhelp.o rbtree.o str.o strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
-RES_OBJS = lowlevel.o trace.o memmgr.o vmmap.o pagealloc.o
+RES_OBJS = lowlevel.o trace.o memmgr.o vmmap.o pagealloc.o kernel_space.o
 INIT_OBJS = start.o kistart.o init_heap.o
 
 all:	kernel.img

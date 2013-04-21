@@ -49,6 +49,7 @@ DECLARE_THIS_FILE
 
 /* Data stored in here temporarily and reflected back to startup info when we're done. */
 SEG_INIT_DATA static PTTB g_pTTB = NULL;              /* pointer to TTB */
+SEG_INIT_DATA static PTTBAUX g_pTTBAux = NULL;        /* pointer to TTB auxiliary data */
 SEG_INIT_DATA static UINT32 g_cpgForPageTables = 0;   /* number of pages being used for page tables */
 SEG_INIT_DATA static UINT32 g_ctblFreeonLastPage = 0; /* number of page tables free on last page */
 SEG_INIT_DATA static PPAGETAB g_ptblNext = NULL;      /* pointer to next free page table */
@@ -84,16 +85,71 @@ SEG_INIT_CODE static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPag
 }
 
 /*
+ * Morphs the "auxiliary flags" bits used for a page table entry into "auxiliary flags" used for a TTB entry.
+ *
+ * Parameters:
+ * - uiPageAuxFlags = Page auxiliary flag bits that would be used for a page table entry.
+ *
+ * Returns:
+ * TTB auxiliary flag bits that would be used for a TTB entry.
+ */
+SEG_INIT_CODE static UINT32 make_section_aux_flags(UINT32 uiPageAuxFlags)
+{
+  register UINT32 rc = uiPageAuxFlags & (PGAUX_SACRED);
+  /* TODO if we define any other flags */
+  return rc;
+}
+
+/*
+ * Allocates a new page table, initializes it, and initializes the pointed-to TTB entry with a
+ * pointer to it.
+ *
+ * Parameters:
+ * - pTTBEntry = Pointer to the TTB entry to be filled; this entry is modified.
+ * - pAuxEntry = Pointer to the TTB aux entry to be filled; this entry is modified.
+ * - uiTableFlags = Flags to be used for the TTB entry.
+ *
+ * Returns:
+ * A pointer to the new page table.
+ *
+ * Side effects:
+ * Modifies the global variables g_cpgForPageTables, g_ctblFreeonLastPage, and g_ptblNext.
+ */
+SEG_INIT_CODE static PPAGETAB alloc_page_table(PTTB pTTBEntry, PTTBAUX pAuxEntry, UINT32 uiTableFlags)
+{
+  register PPAGETAB pTab;   /* pointer to new page table */
+  register UINT32 i;        /* loop counter */
+
+  if (g_ctblFreeonLastPage == 0)
+  {
+    g_cpgForPageTables++;
+    g_ctblFreeonLastPage = 2;
+  }
+  g_ctblFreeonLastPage--;
+  pTab = g_ptblNext++;
+  for (i=0; i<SYS_PGTBL_ENTRIES; i++)
+  {
+    pTab->pgtbl[i].data = 0;  /* blank out the new page table */
+    pTab->pgaux[i].data = 0;
+  }
+  pTTBEntry->data = ((UINT32)pTab) | uiTableFlags;  /* poke new entry */
+  pAuxEntry->data = TTBAUXFLAGS_PAGETABLE;
+  return pTab;
+}
+
+/*
  * Allocates page mapping entries within a single current entry in the TTB.
  *
  * Parameters:
  * - paBase = The page-aligned base physical address to map.
  * - pTTBEntry = Pointer to the TTB entry to be used.
+ * - pAuxEntry = Pointer to the TTB auxiliary entry to be used.
  * - ndxPage = The "first" index within the current page to use.
  * - cpg = The maximum number of pages we want to map.  This function will only map as many pages as will
  *         fit in the current TTB entry, as indicated by ndxPage.
  * - uiTableFlags = Flags to be used or verified for the TTB entry.
  * - uiPageFlags = Flags to be used for new page table entries.
+ * - uiAuxFlags = Flags to be used for new page table auxiliary entries.
  *
  * Returns:
  * The number of pages that were actually mapped by this function call, or -1 if there was an error in the mapping.
@@ -103,8 +159,8 @@ SEG_INIT_CODE static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPag
  * table that the TTB entry points to, where applicable.  If we need to allocate a new page table, may modify the
  * global variables g_cpgForPageTables, g_ctblFreeonLastPage, and g_ptblNext.
  */
-SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, INT32 ndxPage, INT32 cpg, UINT32 uiTableFlags,
-				       UINT32 uiPageFlags)
+SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, PTTBAUX pAuxEntry, INT32 ndxPage,
+				       INT32 cpg, UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags)
 {
   INT32 cpgCurrent;    /* number of pages we're mapping */
   PPAGETAB pTab;       /* pointer to current or new page table */
@@ -113,29 +169,24 @@ SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, INT32 nd
   switch (pTTBEntry->data & TTBQUERY_MASK)
   {
     case TTBQUERY_FAULT:   /* not allocated, allocate a new page table for the slot */
-      if (g_ctblFreeonLastPage == 0)
-      {
-	g_cpgForPageTables++;
-	g_ctblFreeonLastPage = 2;
-      }
-      g_ctblFreeonLastPage--;
-      pTab = g_ptblNext++;
-      for (i=0; i<SYS_PGTBL_ENTRIES; i++)
-      {
-	pTab->pgtbl[i].data = 0;  /* blank out the new page table */
-	pTab->pgaux[i].data = 0;
-      }
-      pTTBEntry->data = ((UINT32)pTab) | uiTableFlags;  /* poke new entry */
+      pTab = alloc_page_table(pTTBEntry, pAuxEntry, uiTableFlags);
       break;
 
     case TTBQUERY_PGTBL:    /* existing page table */
       if ((pTTBEntry->data & TTBPGTBL_ALLFLAGS) != uiTableFlags)
 	return -1;  /* table flags not compatible */
+      pTab = (PPAGETAB)(pTTBEntry->data & TTBPGTBL_BASE);
       break;
 
     case TTBQUERY_SEC:
-    case TTBQUERY_PXNSEC:
-      /* existing section, deal with this later */
+    case TTBQUERY_PXNSEC:   /* existing section */
+      if ((pTTBEntry->data & TTBSEC_ALLFLAGS) != make_section_flags(uiTableFlags, uiPageFlags))
+	return -1;
+      if (pAuxEntry->data != make_section_aux_flags(uiAuxFlags))
+	return -1;
+      if ((pTTBEntry->data & TTBSEC_BASE) != (paBase & TTBSEC_BASE))
+	return -1;
+      pTab = NULL;
       break;
   }
 
@@ -144,24 +195,14 @@ SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, INT32 nd
   if (cpg < cpgCurrent)
     cpgCurrent = cpg;     /* only map up to max requested */
 
-  if (pTTBEntry->data & TTBSEC_ALWAYS)
-  {
-    /* this is a section, make sure its base address covers this mapping and its flags are compatible */
-    if ((pTTBEntry->data & TTBSEC_ALLFLAGS) != make_section_flags(uiTableFlags, uiPageFlags))
-      return -1;
-    if ((pTTBEntry->data & TTBSEC_BASE) != (paBase & TTBSEC_BASE))
-      return -1;
-  }
-  else
-  {
-    /* fill in entries in the page table */
-    pTab = (PPAGETAB)(pTTBEntry->data & TTBPGTBL_BASE);
+  if (pTab)
+  { /* fill in entries in the page table */
     for (i=0; i<cpgCurrent; i++)
     {
       if ((pTab->pgtbl[ndxPage + i].data & PGQUERY_MASK) != PGQUERY_FAULT)
 	return -1;   /* stepping on existing mapping */
       pTab->pgtbl[ndxPage + i].data = paBase | uiPageFlags;
-      pTab->pgaux[ndxPage + i].data = 0; /* TODO */
+      pTab->pgaux[ndxPage + i].data = uiAuxFlags;
       paBase += SYS_PAGE_SIZE;
     }
   }
@@ -178,6 +219,7 @@ SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, INT32 nd
  * - cpg = The number of pages to be mapped.
  * - uiTableFlags = Flags to be used or verified for TTB entries.
  * - uiPageFlags = Flags to be used for new page table entries.
+ * - uiAuxFlags = Flags to be used for new auxiliary TTB entries.
  *
  * Returns:
  * TRUE if the mapping succeeded, FALSE if it failed.
@@ -188,13 +230,14 @@ SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, INT32 nd
  * g_ctblFreeonLastPage, and g_ptblNext.
  */
 SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg, UINT32 uiTableFlags,
-				    UINT32 uiPageFlags)
+				    UINT32 uiPageFlags, UINT32 uiAuxFlags)
 {
   static DECLARE_INIT_STRING8_CONST(sz1, "Map ");
   static DECLARE_INIT_STRING8_CONST(sz2, "->");
   static DECLARE_INIT_STRING8_CONST(sz3, ",cpg=");
   static DECLARE_INIT_STRING8_CONST(sz4, ",tf="); 
   static DECLARE_INIT_STRING8_CONST(sz5, ",pf=");
+  static DECLARE_INIT_STRING8_CONST(sz6, ",af=");
   INT32 ndxTTB = mmVMA2TTBIndex(vmaBase);       /* TTB entry index */
   INT32 ndxPage = mmVMA2PGTBLIndex(vmaBase);    /* starting page entry index */
   INT32 cpgCurrent;                             /* current number of pages mapped */
@@ -209,12 +252,15 @@ SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg
   ETrWriteWord(uiTableFlags);
   ETrWriteString8(sz5);
   ETrWriteWord(uiPageFlags);
+  ETrWriteString8(sz6);
+  ETrWriteWord(uiAuxFlags);
   ETrWriteChar8('\n');
 
   if ((cpg > 0) && (ndxPage > 0))
   {
     /* We are starting in the middle of a VM page.  Map to the end of the VM page. */
-    cpgCurrent = alloc_pages(paBase, g_pTTB + ndxTTB, ndxPage, cpg, uiTableFlags, uiPageFlags);
+    cpgCurrent = alloc_pages(paBase, g_pTTB + ndxTTB, g_pTTBAux + ndxTTB, ndxPage, cpg, uiTableFlags,
+			     uiPageFlags, uiAuxFlags);
     if (cpgCurrent < 0)
     {
       /* ETrWriteChar8('a'); */
@@ -236,6 +282,7 @@ SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg
       {
 	case TTBQUERY_FAULT:   /* unmapped - map the section */
 	  g_pTTB[ndxTTB].data = paBase | make_section_flags(uiTableFlags, uiPageFlags);
+	  g_pTTBAux[ndxTTB].data = make_section_aux_flags(uiAuxFlags);
 	  break;
 
 	case TTBQUERY_PGTBL:   /* collided with a page table */
@@ -249,6 +296,11 @@ SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg
 	    /* ETrWriteChar8('c'); */
 	    return FALSE;    /* invalid flags */
 	  }
+	  if (g_pTTBAux[ndxTTB].data != make_section_aux_flags(uiAuxFlags))
+	  {
+	    /* ETrWriteChar8('!'); */
+	    return FALSE;    /* invalid aux flags */
+	  }
 	  if ((g_pTTB[ndxTTB].data & TTBSEC_BASE) != paBase)
 	  {
 	    /* ETrWriteChar8('d'); */
@@ -261,7 +313,8 @@ SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg
     else
     {
       /* just map 256 individual pages */
-      cpgCurrent = alloc_pages(paBase, g_pTTB + ndxTTB, 0, cpg, uiTableFlags, uiPageFlags);
+      cpgCurrent = alloc_pages(paBase, g_pTTB + ndxTTB, g_pTTBAux + ndxTTB, 0, cpg, uiTableFlags,
+			       uiPageFlags, uiAuxFlags);
       if (cpgCurrent < 0)
       {
 	/* ETrWriteChar8('e'); */
@@ -277,7 +330,7 @@ SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg
   if (cpg > 0)
   {
     /* map the "tail end" onto the next TTB */
-    if (alloc_pages(paBase, g_pTTB + ndxTTB, 0, cpg, uiTableFlags, uiPageFlags) < 0)
+    if (alloc_pages(paBase, g_pTTB + ndxTTB, g_pTTBAux + ndxTTB, 0, cpg, uiTableFlags, uiPageFlags, uiAuxFlags) < 0)
     {
       /* ETrWriteChar8('f'); */
       return FALSE;
@@ -308,8 +361,10 @@ extern char paFirstFree, cpgPrestartTotal, paLibraryCode, vmaLibraryCode, cpgLib
 SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
 {
   static DECLARE_INIT_STRING8_CONST(szTTBAt, "EMmInit: TTB1@");
+#if 0
   static DECLARE_INIT_STRING8_CONST(szPageTable, "Page table pages:");
   static DECLARE_INIT_STRING8_CONST(szFree, "\nFree last page:");
+#endif
   PHYSADDR paTTB = (PHYSADDR)(&paFirstFree);  /* location of the system TTB1 */
   UINT32 cbMPDB;                              /* number of bytes in the MPDB */
   register INT32 i;                           /* loop counter */
@@ -332,8 +387,14 @@ SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
   for (i=0; i<SYS_TTB1_ENTRIES; i++)
     g_pTTB[i].data = 0;
 
+  /* Save off the TTB auxiliary data location and initialize it. */
+  pstartup->paTTBAux = paTTB + SYS_TTB1_SIZE;
+  g_pTTBAux = (PTTBAUX)(pstartup->paTTBAux);
+  for (i=0; i<SYS_TTB1_ENTRIES; i++)
+    g_pTTBAux[i].data = 0;
+
   /* Allocate space for the Master Page Database but do not initialize it. */
-  pstartup->paMPDB = paTTB + SYS_TTB1_SIZE;
+  pstartup->paMPDB = pstartup->paTTBAux + SYS_TTB1_SIZE;
   cbMPDB = pstartup->cpgSystemTotal << 3;    /* 8 bytes per entry */
   pstartup->cpgMPDB = cbMPDB >> SYS_PAGE_BITS;
   if (cbMPDB & (SYS_PAGE_SIZE - 1))
@@ -347,38 +408,53 @@ SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
   g_ptblNext = (PPAGETAB)(pstartup->paFirstPageTable);
   
   /* Map the "prestart" area (everything below load address, plus prestart code & data) as identity. */
-  VERIFY(map_pages(0, 0, (INT32)(&cpgPrestartTotal), TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_AP01));
+  VERIFY(map_pages(0, 0, (INT32)(&cpgPrestartTotal), TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_AP01, 0));
   /* Map the IO area as identity. */
-  VERIFY(map_pages(PHYSADDR_IO_BASE, PHYSADDR_IO_BASE, PAGE_COUNT_IO, TTBFLAGS_MMIO, PGTBLFLAGS_MMIO));
+  VERIFY(map_pages(PHYSADDR_IO_BASE, PHYSADDR_IO_BASE, PAGE_COUNT_IO, TTBFLAGS_MMIO, PGTBLFLAGS_MMIO, 0));
   /* Map the library area. */
   VERIFY(map_pages((PHYSADDR)(&paLibraryCode), (KERNADDR)(&vmaLibraryCode), (INT32)(&cpgLibraryCode),
-                   TTBFLAGS_LIB_CODE, PGTBLFLAGS_LIB_CODE));
+                   TTBFLAGS_LIB_CODE, PGTBLFLAGS_LIB_CODE, PGAUXFLAGS_LIB_CODE));
   /* Map the kernel code area. */
   VERIFY(map_pages((PHYSADDR)(&paKernelCode), (KERNADDR)(&vmaKernelCode), (INT32)(&cpgKernelCode),
-                   TTBFLAGS_KERNEL_CODE, PGTBLFLAGS_KERNEL_CODE));
+                   TTBFLAGS_KERNEL_CODE, PGTBLFLAGS_KERNEL_CODE, PGAUXFLAGS_KERNEL_CODE));
   /* Map the kernel data/BSS area. */
   VERIFY(map_pages((PHYSADDR)(&paKernelData), (KERNADDR)(&vmaKernelData),
-                   (INT32)(&cpgKernelData) + (INT32)(&cpgKernelBss), TTBFLAGS_KERNEL_DATA, PGTBLFLAGS_KERNEL_DATA));
+                   (INT32)(&cpgKernelData) + (INT32)(&cpgKernelBss), TTBFLAGS_KERNEL_DATA, PGTBLFLAGS_KERNEL_DATA,
+		   PGAUXFLAGS_KERNEL_DATA));
   /* Map the kernel init code area. */
   VERIFY(map_pages((PHYSADDR)(&paInitCode), (KERNADDR)(&vmaInitCode), (INT32)(&cpgInitCode),
-                   TTBFLAGS_KERNEL_CODE, PGTBLFLAGS_KERNEL_CODE));
+                   TTBFLAGS_INIT_CODE, PGTBLFLAGS_INIT_CODE, PGAUXFLAGS_INIT_CODE));
   /* Map the kernel init data/BSS area. */
   VERIFY(map_pages((PHYSADDR)(&paInitData), (KERNADDR)(&vmaInitData),
-                   (INT32)(&cpgInitData) + (INT32)(&cpgInitBss), TTBFLAGS_KERNEL_DATA, PGTBLFLAGS_KERNEL_DATA));
+                   (INT32)(&cpgInitData) + (INT32)(&cpgInitBss), TTBFLAGS_INIT_DATA, PGTBLFLAGS_INIT_DATA,
+		   PGAUXFLAGS_INIT_DATA));
   /* Map the TTB itself. */
   pstartup->kaTTB = (KERNADDR)(&vmaFirstFree);
   VERIFY(map_pages(paTTB, pstartup->kaTTB, SYS_TTB1_SIZE / SYS_PAGE_SIZE, TTBFLAGS_KERNEL_DATA,
-		   PGTBLFLAGS_KERNEL_DATA));
+		   PGTBLFLAGS_KERNEL_DATA, PGAUXFLAGS_KERNEL_DATA));
+  /* Map the TTB auxiliary data. */
+  pstartup->kaTTBAux = pstartup->kaTTB + SYS_TTB1_SIZE;
+  VERIFY(map_pages(pstartup->paTTBAux, pstartup->kaTTBAux, SYS_TTB1_SIZE / SYS_PAGE_SIZE, TTBFLAGS_KERNEL_DATA,
+		   PGTBLFLAGS_KERNEL_DATA, PGAUXFLAGS_KERNEL_DATA));
   /* Map the Master Page Database. */
-  pstartup->kaMPDB = pstartup->kaTTB + SYS_TTB1_SIZE;
+  pstartup->kaMPDB = pstartup->kaTTBAux + SYS_TTB1_SIZE;
   VERIFY(map_pages(pstartup->paMPDB, pstartup->kaTTB + SYS_TTB1_SIZE, pstartup->cpgMPDB, TTBFLAGS_KERNEL_DATA,
-		   PGTBLFLAGS_KERNEL_DATA));
+		   PGTBLFLAGS_KERNEL_DATA, PGAUXFLAGS_KERNEL_DATA));
   /* Map the IO area into high memory as well. */
-  VERIFY(map_pages(PHYSADDR_IO_BASE, VMADDR_IO_BASE, PAGE_COUNT_IO, TTBFLAGS_MMIO, PGTBLFLAGS_MMIO));
+  VERIFY(map_pages(PHYSADDR_IO_BASE, VMADDR_IO_BASE, PAGE_COUNT_IO, TTBFLAGS_MMIO, PGTBLFLAGS_MMIO, PGAUXFLAGS_MMIO));
+
+  /*
+   * Allocate one extra page table, just to ensure that we have sufficient free page table entries when we get up
+   * to the startup code.
+   */
+  i = mmVMA2TTBIndex(VMADDR_KERNEL_FENCE);
+  while ((g_pTTB[i].data & TTBQUERY_MASK) != TTBQUERY_FAULT)
+    i++;
+  alloc_page_table(g_pTTB + i, g_pTTBAux + i, TTBFLAGS_KERNEL_DATA);
 
 #if 0
   /* Dump the TTB and page tables to trace output. */
-  ETrDumpWords((PUINT32)paTTB, (SYS_TTB1_SIZE + (g_cpgForPageTables << SYS_PAGE_BITS)) >> 2);
+  ETrDumpWords((PUINT32)paTTB, (SYS_TTB1_SIZE + SYS_TTB1_SIZE + (g_cpgForPageTables << SYS_PAGE_BITS)) >> 2);
   ETrWriteString8(szPageTable);
   ETrWriteWord(g_cpgForPageTables);
   ETrWriteString8(szFree);

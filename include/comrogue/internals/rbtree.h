@@ -66,14 +66,14 @@ typedef struct tagRBTREENODE {
 #define rbtNodeRight(ptn)  ((PRBTREENODE)((ptn)->ptnRightColor & ~1))
 #define rbtNodeColor(ptn)  ((ptn)->ptnRightColor & 1)
 #define rbtIsRed(ptn)      ((ptn) ? rbtNodeColor(ptn) : FALSE)
-#define rbtSetNodeRight(ptn, ptnRight) \
-        do { (ptn)->ptnRightColor = (((UINT_PTR)(ptnRight)) & ~1) | ((ptn)->ptnRightColor & 1); } while (0)
+#define rbtSetNodeRight(ptn, ptnR) \
+        do { (ptn)->ptnRightColor = (((UINT_PTR)(ptnR)) & ~1) | ((ptn)->ptnRightColor & 1); } while (0)
 #define rbtSetNodeColor(ptn, clr) \
         do { (ptn)->ptnRightColor = ((ptn)->ptnRightColor & ~1) | ((clr) ? 1 : 0); } while (0)
 #define rbtToggleColor(ptn) do { if (ptn) (ptn)->ptnRightColor ^= 1; } while (0)
-#define rbtInitNode(ptn, ptnLeft, ptnRight, clr, key) \
-  do { (ptn)->ptnLeft = (ptnLeft); (ptn)->ptnRightColor = (((UINT_PTR)(ptnRight)) & ~1) | ((clr) ? 1 : 0); \
-       (ptn)->treekey = (key); } while (0)
+#define rbtInitNode(ptn, ptnL, ptnR, clr, key) \
+  do { (ptn)->ptnLeft = (ptnL); (ptn)->ptnRightColor = (((UINT_PTR)(ptnR)) & ~1) | ((clr) ? 1 : 0); \
+       (ptn)->treekey = (TREEKEY)(key); } while (0)
 #define rbtNewNode(ptn, key) rbtInitNode(ptn, NULL, NULL, RED, key)
 
 /* The head-of-tree structure. */
@@ -86,14 +86,20 @@ typedef struct tagRBTREE {
 #define rbtInitTree(ptree, pfnCompare) \
         do { (ptree)->pfnTreeCompare = (pfnCompare); (ptree)->ptnRoot = NULL; } while (0)
 
+/* Type of function used by RbtWalk. */
+typedef BOOL (*PFNRBTWALK)(PRBTREE, PRBTREENODE, PVOID);
+
 /* Function prototypes. */
 CDECL_BEGIN
 
 extern INT32 RbtStdCompareByValue(TREEKEY k1, TREEKEY k2);
 extern void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew);
 extern PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key);
+extern PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key);
+extern PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key);
 extern PRBTREENODE RbtFindMin(PRBTREE ptree);
 extern void RbtDelete(PRBTREE ptree, TREEKEY key);
+extern BOOL RbtWalk(PRBTREE ptree, PFNRBTWALK pfnWalk, PVOID pData);
 
 CDECL_END
 

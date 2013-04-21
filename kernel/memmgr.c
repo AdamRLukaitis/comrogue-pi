@@ -30,6 +30,8 @@
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
 #include <comrogue/types.h>
+#include <comrogue/objectbase.h>
+#include <comrogue/allocator.h>
 #include <comrogue/internals/seg.h>
 #include <comrogue/internals/memmgr.h>
 #include <comrogue/internals/startup.h>
@@ -39,11 +41,16 @@
  *---------------------
  */
 
-extern void _MmInitVMMap(PSTARTUP_INFO pstartup);
+extern IMalloc *_MmGetInitHeap(void);
+extern void _MmInitKernelSpace(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap);
+extern void _MmInitVMMap(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap);
 extern void _MmInitPageAlloc(PSTARTUP_INFO pstartup);
 
 SEG_INIT_CODE void _MmInit(PSTARTUP_INFO pstartup)
 {
-  _MmInitVMMap(pstartup);
+  IMalloc *pmInitHeap = _MmGetInitHeap();
+  _MmInitKernelSpace(pstartup, pmInitHeap);
+  _MmInitVMMap(pstartup, pmInitHeap);
   _MmInitPageAlloc(pstartup);
+  IUnknown_Release(pmInitHeap);
 }

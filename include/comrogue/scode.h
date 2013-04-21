@@ -102,5 +102,7 @@
 #define MEMMGR_E_BADTTBFLG  SCODE_CAST(0x86010002)    /* bad TTB flags encountered */
 #define MEMMGR_E_COLLIDED   SCODE_CAST(0x86010003)    /* memory mapping collided */
 #define MEMMGR_E_ENDTTB     SCODE_CAST(0x86010004)    /* tried to "walk off" end of TTB */
+#define MEMMGR_E_NOSACRED   SCODE_CAST(0x86010005)    /* tried to demap a "sacred" entry */
+#define MEMMGR_E_NOKERNSPC  SCODE_CAST(0x86010006)    /* no kernel space */
 
 #endif /* __SCODE_H_INCLUDED */

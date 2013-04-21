@@ -88,8 +88,10 @@ typedef unsigned long long uint64_t;
 #ifdef __COMROGUE_INTERNALS__
 
 /* Internal system types */
-typedef UINT32 PHYSADDR;  /* physical address */
-typedef UINT32 KERNADDR;  /* kernel address */
+typedef UINT32 PHYSADDR;      /* physical address */
+typedef UINT32 KERNADDR;      /* kernel address */
+typedef PHYSADDR *PPHYSADDR;
+typedef KERNADDR *PKERNADDR;
 
 #endif /* __COMROGUE_INTERNALS__ */
 

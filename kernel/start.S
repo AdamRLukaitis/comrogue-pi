@@ -68,7 +68,6 @@ COMROGUEStart:
 	/* copy startup info to our local buffer */
 	mov r1, r0
 	ldr r0, =kiStartupInfo
-	mov r11, r0                   /* save for later */
 	ldr r2, [r1]                  /* get number of bytes to copy */
 	ldr ip, =StrCopyMem	      /* this is needed to branch to a library function */
 	ldr lr, =.postCopy

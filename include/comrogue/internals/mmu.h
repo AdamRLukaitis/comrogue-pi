@@ -48,6 +48,7 @@
 #define SYS_TTB1_ENTRIES    4096          /* SYS_TTB1_SIZE/4, number of entries in TTB1 */
 #define SYS_TTB_BITS        12            /* log2(SYS_TTB1_SIZE/4), number of bits in a TTB address */
 #define SYS_SEC_SIZE        1048576       /* standard section size */
+#define SYS_SEC_BITS        20            /* number of bits in a section address */
 #define SYS_SEC_PAGES       256           /* SYS_SEC_SIZE/SYS_PAGE_SIZE, number of pages equivalent to a section */
 #define SYS_PGTBL_SIZE      1024          /* page tables must be located on this boundary and are this size */
 #define SYS_PGTBL_BITS      8             /* log2(SYS_PGTBL_SIZE/4), number of bits in a page table address */
@@ -100,6 +101,9 @@
 #define TTBQUERY_SEC        0x00000002    /* indicates a section */
 #define TTBQUERY_PXNSEC     0x00000003    /* indicates a section with PXN (or reserved) */
 
+/* TTB auxiliary descriptor bits */
+#define TTBAUX_SACRED       0x00000001    /* sacred entry, do not deallocate */
+
 /* Small page table entry bits */
 #define PGTBLSM_XN          0x00000001    /* Execute-Never */
 #define PGTBLSM_ALWAYS      0x00000002    /* this bit must always be set for a page table entry */
@@ -125,15 +129,29 @@
 #define PGQUERY_SM          0x00000002    /* small page (4K) */
 #define PGQUERY_SM_XN       0x00000003    /* small page with Execute-Never set */
 
+/* Page auxiliary descriptor bits */
+#define PGAUX_SACRED        0x00000001    /* sacred entry, do not deallocate */
+
 /* Combinations of flags we use regularly. */
 #define TTBFLAGS_LIB_CODE       TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_LIB_CODE     (PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP10)
+#define PGAUXFLAGS_LIB_CODE     PGAUX_SACRED
 #define TTBFLAGS_KERNEL_CODE    TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_KERNEL_CODE  (PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01)
+#define PGAUXFLAGS_KERNEL_CODE  PGAUX_SACRED
 #define TTBFLAGS_KERNEL_DATA    TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_KERNEL_DATA  (PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01)
+#define PGAUXFLAGS_KERNEL_DATA  PGAUX_SACRED
+#define TTBFLAGS_INIT_CODE      TTBFLAGS_KERNEL_CODE
+#define PGTBLFLAGS_INIT_CODE    PGTBLFLAGS_KERNEL_CODE
+#define PGAUXFLAGS_INIT_CODE    0
+#define TTBFLAGS_INIT_DATA      TTBFLAGS_KERNEL_DATA
+#define PGTBLFLAGS_INIT_DATA    PGTBLFLAGS_KERNEL_DATA
+#define PGAUXFLAGS_INIT_DATA    0
 #define TTBFLAGS_MMIO           TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_MMIO         (PGTBLSM_ALWAYS | PGTBLSM_AP01)
+#define PGAUXFLAGS_MMIO         PGAUX_SACRED
+#define TTBAUXFLAGS_PAGETABLE   0
 
 #ifndef __ASM__
 
@@ -186,6 +204,18 @@ typedef union tagTTB {
   TTBSEC sec;                      /* 1Mb section data */
 } TTB, *PTTB;
 
+/* TTB auxiliary descriptor */
+typedef struct tagTTBAUXENTRY {
+  unsigned sacred : 1;             /* sacred TTB - should never be deallocated */
+  unsigned reserved : 31;          /* reserved for future allocation */
+} TTBAUXENTRY, *PTTBAUXENTRY;
+
+/* TTB auxiliary table entry */
+typedef union tagTTBAUX {
+  UINT32 data;                     /* raw data for entry */
+  TTBAUXENTRY aux;                 /* aux entry itself */
+} TTBAUX, *PTTBAUX;
+
 /* page table descriptor for a fault entry */
 typedef struct tagPGTBLFAULT {
   unsigned always0 : 2;            /* bits are always 0 for a fault entry */
@@ -213,10 +243,16 @@ typedef union tagPGTBL {
   PGTBLSM pg;                      /* small page descriptor */
 } PGTBL, *PPGTBL;
 
+/* page auxiliary descriptor */
+typedef struct tagPGAUXENTRY {
+  unsigned sacred : 1;             /* sacred page - should never be deallocated */
+  unsigned reserved : 31;          /* reserved for future allocation */
+} PGAUXENTRY, *PPGAUXENTRY;
+
 /* page table auxiliary entry */
 typedef union tagPGAUX {
   UINT32 data;                     /* raw data for entry */
-  /* TODO */
+  PGAUXENTRY aux;                  /* the auxiliary entry itself */
 } PGAUX, *PPGAUX;
 
 /* complete structure of a page table, hardware + auxiliary */
