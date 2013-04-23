@@ -103,6 +103,7 @@
 
 /* TTB auxiliary descriptor bits */
 #define TTBAUX_SACRED       0x00000001    /* sacred entry, do not deallocate */
+#define TTBAUX_UNWRITEABLE  0x00000002    /* entry unwriteable */
 
 /* Small page table entry bits */
 #define PGTBLSM_XN          0x00000001    /* Execute-Never */
@@ -131,20 +132,21 @@
 
 /* Page auxiliary descriptor bits */
 #define PGAUX_SACRED        0x00000001    /* sacred entry, do not deallocate */
+#define PGAUX_UNWRITEABLE   0x00000002    /* entry unwriteable */
 
 /* Combinations of flags we use regularly. */
 #define TTBFLAGS_LIB_CODE       TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_LIB_CODE     (PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP10)
-#define PGAUXFLAGS_LIB_CODE     PGAUX_SACRED
+#define PGAUXFLAGS_LIB_CODE     (PGAUX_SACRED | PGAUX_UNWRITEABLE)
 #define TTBFLAGS_KERNEL_CODE    TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_KERNEL_CODE  (PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01)
-#define PGAUXFLAGS_KERNEL_CODE  PGAUX_SACRED
+#define PGAUXFLAGS_KERNEL_CODE  (PGAUX_SACRED | PGAUX_UNWRITEABLE)
 #define TTBFLAGS_KERNEL_DATA    TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_KERNEL_DATA  (PGTBLSM_XN | PGTBLSM_ALWAYS | PGTBLSM_B | PGTBLSM_C | PGTBLSM_AP01)
 #define PGAUXFLAGS_KERNEL_DATA  PGAUX_SACRED
 #define TTBFLAGS_INIT_CODE      TTBFLAGS_KERNEL_CODE
 #define PGTBLFLAGS_INIT_CODE    PGTBLFLAGS_KERNEL_CODE
-#define PGAUXFLAGS_INIT_CODE    0
+#define PGAUXFLAGS_INIT_CODE    PGAUX_UNWRITEABLE
 #define TTBFLAGS_INIT_DATA      TTBFLAGS_KERNEL_DATA
 #define PGTBLFLAGS_INIT_DATA    PGTBLFLAGS_KERNEL_DATA
 #define PGAUXFLAGS_INIT_DATA    0
@@ -207,7 +209,8 @@ typedef union tagTTB {
 /* TTB auxiliary descriptor */
 typedef struct tagTTBAUXENTRY {
   unsigned sacred : 1;             /* sacred TTB - should never be deallocated */
-  unsigned reserved : 31;          /* reserved for future allocation */
+  unsigned unwriteable : 1;        /* entry is not writeable */
+  unsigned reserved : 30;          /* reserved for future allocation */
 } TTBAUXENTRY, *PTTBAUXENTRY;
 
 /* TTB auxiliary table entry */
@@ -246,7 +249,8 @@ typedef union tagPGTBL {
 /* page auxiliary descriptor */
 typedef struct tagPGAUXENTRY {
   unsigned sacred : 1;             /* sacred page - should never be deallocated */
-  unsigned reserved : 31;          /* reserved for future allocation */
+  unsigned unwriteable : 1;        /* entry is not writeable */
+  unsigned reserved : 30;          /* reserved for future allocation */
 } PGAUXENTRY, *PPGAUXENTRY;
 
 /* page table auxiliary entry */
@@ -264,6 +268,9 @@ typedef struct tagPAGETAB {
 /* VMA index macros */
 #define mmVMA2TTBIndex(vma)     (((vma) >> (SYS_PAGE_BITS + SYS_PGTBL_BITS)) & ((1 << SYS_TTB_BITS) - 1))
 #define mmVMA2PGTBLIndex(vma)   (((vma) >> SYS_PAGE_BITS) & ((1 << SYS_PGTBL_BITS) - 1))
+#define mmIndices2VMA3(ttb, pgtbl, ofs) \
+  ((((ttb) & ((1 << SYS_TTB_BITS) - 1)) << (SYS_PAGE_BITS + SYS_PGTBL_BITS)) | \
+   (((pgtbl) & ((1 << SYS_PGTBL_BITS) - 1)) << SYS_PAGE_BITS) | ((ofs) & (SYS_PAGE_SIZE - 1)))
 
 /*
  * Data structures for the Master Page Database.

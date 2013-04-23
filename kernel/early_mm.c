@@ -95,7 +95,7 @@ SEG_INIT_CODE static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPag
  */
 SEG_INIT_CODE static UINT32 make_section_aux_flags(UINT32 uiPageAuxFlags)
 {
-  register UINT32 rc = uiPageAuxFlags & (PGAUX_SACRED);
+  register UINT32 rc = uiPageAuxFlags & (PGAUX_SACRED|PGAUX_UNWRITEABLE);
   /* TODO if we define any other flags */
   return rc;
 }

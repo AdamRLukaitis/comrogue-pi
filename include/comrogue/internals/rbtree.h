@@ -82,9 +82,10 @@ typedef struct tagRBTREE {
   PRBTREENODE ptnRoot;             /* pointer to root of tree */
 } RBTREE, *PRBTREE;
 
-/* Macro to initialize the tree head. */
+/* Tree macros. */
 #define rbtInitTree(ptree, pfnCompare) \
         do { (ptree)->pfnTreeCompare = (pfnCompare); (ptree)->ptnRoot = NULL; } while (0)
+#define rbtIsEmpty(ptree)  MAKEBOOL(!((ptree)->ptnRoot))
 
 /* Type of function used by RbtWalk. */
 typedef BOOL (*PFNRBTWALK)(PRBTREE, PRBTREENODE, PVOID);

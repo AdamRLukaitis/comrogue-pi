@@ -39,22 +39,52 @@
 #include <comrogue/types.h>
 #include <comrogue/compiler_macros.h>
 #include <comrogue/internals/mmu.h>
+#include <comrogue/internals/rbtree.h>
 #include <comrogue/internals/startup.h>
 
+/*------------------------------------------
+ * The COMROGUE memory management subsystem
+ *------------------------------------------
+ */
+
+/* Nodes in the page table tree. */
+typedef struct tagPAGENODE {
+  RBTREENODE rbtn;           /* RBT node containing physical address as key */
+  PPAGETAB ppt;              /* pointer to page table */
+} PAGENODE, *PPAGENODE;
+
+/* Virtual memory context. */
+typedef struct tagVMCTXT {
+  PTTB pTTB;                 /* pointer to the TTB */
+  PTTBAUX pTTBAux;           /* pointer to the TTB auxiliary data */
+  UINT32 uiMaxIndex;         /* max index into the above tables */
+  RBTREE rbtPageTables;      /* tree containing page tables this context owns */
+} VMCTXT, *PVMCTXT;
+
 CDECL_BEGIN
+
+/* Low-level maintenance functions */
+extern void _MmFlushCacheForPage(KERNADDR vmaPage, BOOL bWriteback);
+extern void _MmFlushCacheForSection(KERNADDR vmaSection, BOOL bWriteback);
+extern void _MmFlushTLBForPage(KERNADDR vmaPage);
+extern void _MmFlushTLBForPageAndContext(KERNADDR vmaPage, UINT32 uiASID);
+extern void _MmFlushTLBForSection(KERNADDR vmaSection);
+extern void _MmFlushTLBForSectionAndContext(KERNADDR vmaSection, UINT32 uiASID);
+extern PTTB _MmGetTTB0(void);
+extern void _MmSetTTB0(PTTB pTTB);
 
 /* Kernel address space functions */
 extern KERNADDR _MmAllocKernelAddr(UINT32 cpgNeeded);
 extern void _MmFreeKernelAddr(KERNADDR kaBase, UINT32 cpgToFree);
 
 /* Page mapping functions */
-extern PHYSADDR MmGetPhysAddr(PTTB pTTB, KERNADDR vma);
-extern HRESULT MmDemapPages(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg);
-extern HRESULT MmMapPages(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg,
+extern PHYSADDR MmGetPhysAddr(PVMCTXT pvmctxt, KERNADDR vma);
+extern HRESULT MmDemapPages(PVMCTXT pvmctxt, KERNADDR vmaBase, UINT32 cpg);
+extern HRESULT MmMapPages(PVMCTXT pvmctxt, PHYSADDR paBase, KERNADDR vmaBase, UINT32 cpg,
 			  UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags);
-extern HRESULT MmMapKernelPages(PTTB pTTB, PTTBAUX pTTBAux, PHYSADDR paBase, UINT32 cpg, UINT32 uiTableFlags,
+extern HRESULT MmMapKernelPages(PHYSADDR paBase, UINT32 cpg, UINT32 uiTableFlags,
 				UINT32 uiPageFlags, UINT32 uiAuxFlags, PKERNADDR pvmaLocation);
-extern HRESULT MmDemapKernelPages(PTTB pTTB, PTTBAUX pTTBAux, KERNADDR vmaBase, UINT32 cpg);
+extern HRESULT MmDemapKernelPages(KERNADDR vmaBase, UINT32 cpg);
 
 /* Initialization functions only */
 extern void _MmInit(PSTARTUP_INFO pstartup);
