@@ -34,9 +34,9 @@
 
 #ifdef __COMROGUE_INTERNALS__
 
-/*----------------------------------------------
- * BCM2835 ARM Memory Management Unit constants
- *----------------------------------------------
+/*---------------------------------------------------------------------------------------------
+ * BCM2835 ARM Memory Management Unit constants (and other COMROGUE-specific memory constants)
+ *---------------------------------------------------------------------------------------------
  */
 
 /* Memory system constants */
@@ -74,6 +74,9 @@
 #define TTBSEC_SBASE        0xFF000000    /* supersection base address mask */
 #define TTBSEC_SBASEHI      0x00F00000    /* supersection high base address mask */
 
+/* Flags that are safe to alter for a section. */
+#define TTBSEC_SAFEFLAGS    (TTBSEC_ALLFLAGS & ~(TTBSEC_ALWAYS | TTBSEC_SUPER))
+
 /* AP bits for the standard access control model */
 #define TTBSEC_AP00         0x00000000    /* no access */
 #define TTBSEC_AP01         0x00000400    /* supervisor only access */
@@ -94,6 +97,9 @@
 #define TTBPGTBL_ALLFLAGS   0x000003FF    /* "all flags" mask */
 #define TTBPGTBL_BASE       0xFFFFFC00    /* page table base address mask */
 
+/* Flags that are safe to alter for a TTB page table entry. */
+#define TTBPGTBL_SAFEFLAGS  (TTBPGTBL_ALLFLAGS & ~0x03)
+
 /* Bits to query the type of TTB entry we're looking at */
 #define TTBQUERY_MASK       0x00000003    /* bits we can query */
 #define TTBQUERY_FAULT      0x00000000    /* indicates a fault */
@@ -104,6 +110,11 @@
 /* TTB auxiliary descriptor bits */
 #define TTBAUX_SACRED       0x00000001    /* sacred entry, do not deallocate */
 #define TTBAUX_UNWRITEABLE  0x00000002    /* entry unwriteable */
+#define TTBAUX_NOTPAGE      0x00000004    /* entry not mapped in page database */
+#define TTBAUX_ALLFLAGS     0x00000007    /* "all flags" mask */
+
+/* Flags that are safe to alter for the TTB auxiliary table. */
+#define TTBAUX_SAFEFLAGS    (TTBAUX_ALLFLAGS & ~TTBAUX_NOTPAGE)
 
 /* Small page table entry bits */
 #define PGTBLSM_XN          0x00000001    /* Execute-Never */
@@ -115,7 +126,11 @@
 #define PGTBLSM_APX         0x00000200    /* access permission extended */
 #define PGTBLSM_S           0x00000400    /* Shared */
 #define PGTBLSM_NG          0x00000800    /* Not Global */
+#define PGTBLSM_ALLFLAGS    0x00000FFF    /* "all flags" mask */
 #define PGTBLSM_PAGE        0xFFFFF000    /* page base address mask */
+
+/* Flags that are safe to alter for a page table entry. */
+#define PGTBLSM_SAFEFLAGS   (PGTBLSM_ALLFLAGS & ~PGTBLSM_ALWAYS)
 
 /* AP bits for the standard access control model */
 #define PGTBLSM_AP00        0x00000000    /* no access */
@@ -133,6 +148,11 @@
 /* Page auxiliary descriptor bits */
 #define PGAUX_SACRED        0x00000001    /* sacred entry, do not deallocate */
 #define PGAUX_UNWRITEABLE   0x00000002    /* entry unwriteable */
+#define PGAUX_NOTPAGE       0x00000004    /* entry not mapped in page database */
+#define PGAUX_ALLFLAGS      0x00000007    /* "all flags" mask */
+
+/* Flags that are safe to alter for the page auxiliary table. */
+#define PGAUX_SAFEFLAGS     (PGAUX_ALLFLAGS & ~PGAUX_NOTPAGE)
 
 /* Combinations of flags we use regularly. */
 #define TTBFLAGS_LIB_CODE       TTBPGTBL_ALWAYS
@@ -152,7 +172,7 @@
 #define PGAUXFLAGS_INIT_DATA    0
 #define TTBFLAGS_MMIO           TTBPGTBL_ALWAYS
 #define PGTBLFLAGS_MMIO         (PGTBLSM_ALWAYS | PGTBLSM_AP01)
-#define PGAUXFLAGS_MMIO         PGAUX_SACRED
+#define PGAUXFLAGS_MMIO         (PGAUX_SACRED | PGAUX_NOTPAGE)
 #define TTBAUXFLAGS_PAGETABLE   0
 
 #ifndef __ASM__
@@ -210,7 +230,8 @@ typedef union tagTTB {
 typedef struct tagTTBAUXENTRY {
   unsigned sacred : 1;             /* sacred TTB - should never be deallocated */
   unsigned unwriteable : 1;        /* entry is not writeable */
-  unsigned reserved : 30;          /* reserved for future allocation */
+  unsigned notpage : 1;            /* entry not mapped in the page database */
+  unsigned reserved : 29;          /* reserved for future allocation */
 } TTBAUXENTRY, *PTTBAUXENTRY;
 
 /* TTB auxiliary table entry */
@@ -250,7 +271,8 @@ typedef union tagPGTBL {
 typedef struct tagPGAUXENTRY {
   unsigned sacred : 1;             /* sacred page - should never be deallocated */
   unsigned unwriteable : 1;        /* entry is not writeable */
-  unsigned reserved : 30;          /* reserved for future allocation */
+  unsigned notpage : 1;            /* entry not mapped in the page database */
+  unsigned reserved : 29;          /* reserved for future allocation */
 } PGAUXENTRY, *PPGAUXENTRY;
 
 /* page table auxiliary entry */
@@ -272,16 +294,36 @@ typedef struct tagPAGETAB {
   ((((ttb) & ((1 << SYS_TTB_BITS) - 1)) << (SYS_PAGE_BITS + SYS_PGTBL_BITS)) | \
    (((pgtbl) & ((1 << SYS_PGTBL_BITS) - 1)) << SYS_PAGE_BITS) | ((ofs) & (SYS_PAGE_SIZE - 1)))
 
-/*
+/*-----------------------------------------------
  * Data structures for the Master Page Database.
+ *-----------------------------------------------
  */
 
 /* internal structure of a MPDB entry */
 typedef struct tagMPDB1 {
   PHYSADDR paPTE;                  /* PA of page table entry for the page */
   unsigned next : 20;              /* index of "next" entry in list */
-  unsigned tag : 12;               /* page tag */
+  unsigned sectionmap : 1;         /* set if page is part of a section mapping */
+  unsigned tag : 3;                /* page tag */
+  unsigned subtag : 8;             /* page subtag */
 } MPDB1;
+
+/* MPDB tags */
+#define MPDBTAG_UNKNOWN       0    /* unknown, should never be used */
+#define MPDBTAG_NORMAL        1    /* normal user/free page */
+#define MPDBTAG_SYSTEM        2    /* system allocation */
+
+/* MPDB system subtags */
+#define MPDBSYS_ZEROPAGE      0    /* zero page allocation */
+#define MPDBSYS_LIBCODE       1    /* library code */
+#define MPDBSYS_KCODE         2    /* kernel code */
+#define MPDBSYS_KDATA         3    /* kernel data */
+#define MPDBSYS_INIT          4    /* init code & data (to be freed later) */
+#define MPDBSYS_TTB           5    /* the system TTB */
+#define MPDBSYS_TTBAUX        6    /* the system auxiliary TTB table */
+#define MPDBSYS_MPDB          7    /* the MPDB itself */
+#define MPDBSYS_PGTBL         8    /* page tables */
+#define MPDBSYS_GPU           9    /* GPU reserved pages */
 
 /* The MPDB entry itself. */
 typedef union tagMPDB {

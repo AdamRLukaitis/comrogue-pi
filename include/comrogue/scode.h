@@ -105,5 +105,6 @@
 #define MEMMGR_E_NOSACRED   SCODE_CAST(0x86010005)    /* tried to demap a "sacred" entry */
 #define MEMMGR_E_NOKERNSPC  SCODE_CAST(0x86010006)    /* no kernel space */
 #define MEMMGR_E_RECURSED   SCODE_CAST(0x86010007)    /* tried to recurse into page allocation */
+#define MEMMGR_E_BADTAGS    SCODE_CAST(0x86010008)    /* invalid tags for freed page */
 
 #endif /* __SCODE_H_INCLUDED */

@@ -58,8 +58,18 @@ typedef struct tagVMCTXT {
   PTTB pTTB;                 /* pointer to the TTB */
   PTTBAUX pTTBAux;           /* pointer to the TTB auxiliary data */
   UINT32 uiMaxIndex;         /* max index into the above tables */
+  PHYSADDR paTTB;            /* physical address of the TTB */
   RBTREE rbtPageTables;      /* tree containing page tables this context owns */
 } VMCTXT, *PVMCTXT;
+
+/* Pointer to a function to update the page database with a PTE address. */
+typedef void (*PFNSETPTEADDR)(UINT32, PHYSADDR, BOOL);
+
+/* Invalid page return. */
+#define INVALID_PAGE         ((UINT32)(-1))
+
+/* Page allocation flags. */
+#define PGALLOC_ZERO         0x00000001      /* allocated page must be zeroed */
 
 CDECL_BEGIN
 
@@ -85,6 +95,10 @@ extern HRESULT MmMapPages(PVMCTXT pvmctxt, PHYSADDR paBase, KERNADDR vmaBase, UI
 extern HRESULT MmMapKernelPages(PHYSADDR paBase, UINT32 cpg, UINT32 uiTableFlags,
 				UINT32 uiPageFlags, UINT32 uiAuxFlags, PKERNADDR pvmaLocation);
 extern HRESULT MmDemapKernelPages(KERNADDR vmaBase, UINT32 cpg);
+
+/* Page allocation functions */
+extern HRESULT MmAllocatePage(UINT32 uiFlags, UINT32 tag, UINT32 subtag, PPHYSADDR ppaNewPage);
+extern HRESULT MmFreePage(PHYSADDR paPage, UINT32 tag, UINT32 subtag);
 
 /* Initialization functions only */
 extern void _MmInit(PSTARTUP_INFO pstartup);
