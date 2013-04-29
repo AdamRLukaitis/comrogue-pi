@@ -28,25 +28,37 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
-MAKEFLAGS += -rR
-CRBASEDIR := $(abspath ..)
-include $(CRBASEDIR)/armcompile.mk
 
-PRESTART_OBJS = prestart.o early_trace.o collect_startup.o early_mm.o
-LIB_OBJS = divide.o qdivrem.o intlib.o objhelp.o rbtree.o str.o strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
-RES_OBJS = lowlevel.o trace.o memmgr.o vmmap.o pagealloc.o kernel_space.o
-INIT_OBJS = start.o kistart.o init_heap.o
+# Define the directory and prefix for ARM cross-compiler tools.
+ARMDIR ?= /opt/gnuarm/bin
+ARMPREFIX ?= arm-none-eabi
 
-all:	kernel.img
+# Define the ARM cross-compiler tools.
+CC := $(ARMDIR)/$(ARMPREFIX)-gcc
+CPP := $(ARMDIR)/$(ARMPREFIX)-cpp
+AS := $(ARMDIR)/$(ARMPREFIX)-as
+LD := $(ARMDIR)/$(ARMPREFIX)-ld
+OBJDUMP := $(ARMDIR)/$(ARMPREFIX)-objdump
+OBJCOPY := $(ARMDIR)/$(ARMPREFIX)-objcopy
 
-kernel.elf: $(PRESTART_OBJS) $(LIB_OBJS) $(RES_OBJS) $(INIT_OBJS) kernel.lds
-	$(LD) -T kernel.lds $(PRESTART_OBJS) $(LIB_OBJS) $(RES_OBJS) $(INIT_OBJS) -o kernel.elf
+# Define the default flags for compilation.
+DEFS := -D__COMROGUE_INTERNALS__
+INCLUDES := -I$(CRBASEDIR)/include -I$(CRBASEDIR)/idl
+CFLAGS := $(INCLUDES) -mabi=aapcs -mfloat-abi=hard -mcpu=arm1176jzf-s -Wall -O2 \
+	  -nostdlib -nostartfiles -ffreestanding $(DEFS)
+AFLAGS := -mcpu=arm1176jzf-s -mfloat-abi=hard
+ASM_CPP_FLAGS := $(INCLUDES) $(DEFS) -D__ASM__
 
-kernel.img: kernel.elf
-	$(OBJDUMP) -D kernel.elf > kernel.list
-	$(OBJDUMP) -t kernel.elf > kernel.syms
-	sort kernel.syms > kernel.syms.sorted
-	$(OBJCOPY) kernel.elf -O binary kernel.img
+# Standard rule for pre-processing linker script files.
+%.lds: %.Lds
+	$(CPP) $(ASM_CPP_FLAGS) -P -o $@ $<
 
-clean:
-	-rm *.o *.s *.lds kernel.img kernel.elf kernel.list kernel.syms*
+# Standard rule for preprocessing and assembling assembler files.
+%.o: %.S
+	$(CPP) $(ASM_CPP_FLAGS) -o $(basename $<).s $<
+	$(AS) $(AFLAGS) -o $@ $(basename $<).s
+
+# Standard rule for compiling C files.
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
