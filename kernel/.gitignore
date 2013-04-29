@@ -1,6 +1,6 @@
 *.s
-comrogue-kernel.elf
-comrogue-kernel.lds.parsed
-comrogue-kernel.list
-comrogue-kernel.syms*
+*.lds
+kernel.elf
+kernel.list
+kernel.syms*
 kernel.img

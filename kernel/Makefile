@@ -54,16 +54,17 @@ INIT_OBJS = start.o kistart.o init_heap.o
 
 all:	kernel.img
 
-comrogue-kernel.elf : $(PRESTART_OBJS) $(LIB_OBJS) $(RES_OBJS) $(INIT_OBJS) comrogue-kernel.lds
-	$(CPP) $(ASM_CPP_FLAGS) -P -o comrogue-kernel.lds.parsed comrogue-kernel.lds
-	$(LD) -T comrogue-kernel.lds.parsed $(PRESTART_OBJS) $(LIB_OBJS) $(RES_OBJS) \
-		$(INIT_OBJS) -o comrogue-kernel.elf
+kernel.elf : $(PRESTART_OBJS) $(LIB_OBJS) $(RES_OBJS) $(INIT_OBJS) kernel.lds
+	$(LD) -T kernel.lds $(PRESTART_OBJS) $(LIB_OBJS) $(RES_OBJS) $(INIT_OBJS) -o kernel.elf
 
-kernel.img : comrogue-kernel.elf
-	$(OBJDUMP) -D comrogue-kernel.elf > comrogue-kernel.list
-	$(OBJDUMP) -t comrogue-kernel.elf > comrogue-kernel.syms
-	sort comrogue-kernel.syms > comrogue-kernel.syms.sorted
-	$(OBJCOPY) comrogue-kernel.elf -O binary kernel.img
+kernel.img : kernel.elf
+	$(OBJDUMP) -D kernel.elf > kernel.list
+	$(OBJDUMP) -t kernel.elf > kernel.syms
+	sort kernel.syms > kernel.syms.sorted
+	$(OBJCOPY) kernel.elf -O binary kernel.img
+
+%.lds: %.Lds
+	$(CPP) $(ASM_CPP_FLAGS) -P -o $@ $<
 
 %.o: %.S
 	$(CPP) $(ASM_CPP_FLAGS) -o $(basename $<).s $<
@@ -73,5 +74,4 @@ kernel.img : comrogue-kernel.elf
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	-rm *.o *.s kernel.img comrogue-kernel.elf comrogue-kernel.lds.parsed comrogue-kernel.list \
-			comrogue-kernel.syms*
+	-rm *.o *.s *.lds kernel.img kernel.elf kernel.list kernel.syms*
