@@ -38,6 +38,7 @@
 #include <comrogue/internals/seg.h>
 #include <comrogue/internals/startup.h>
 #include <comrogue/internals/trace.h>
+#include "initfuncs.h"
 
 #ifdef THIS_FILE
 #undef THIS_FILE

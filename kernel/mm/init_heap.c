@@ -36,6 +36,7 @@
 #include <comrogue/objhelp.h>
 #include <comrogue/internals/seg.h>
 #include <comrogue/internals/layout.h>
+#include "initfuncs.h"
 
 /*-------------------------------------------------------------------------------------------------------------
  * Initial heap implementation.  Since this will only be used by initializer code and freed with the rest

@@ -29,24 +29,30 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#include <comrogue/types.h>
-#include <comrogue/objectbase.h>
-#include <comrogue/allocator.h>
-#include <comrogue/internals/seg.h>
-#include <comrogue/internals/memmgr.h>
-#include <comrogue/internals/startup.h>
-#include "initfuncs.h"
+#ifndef __INITFUNCS_H_INCLUDED
+#define __INITFUNCS_H_INCLUDED
 
-/*---------------------
- * Initialization code
- *---------------------
+#ifndef __ASM__
+
+#include <comrogue/allocator.h>
+#include <comrogue/internals/startup.h>
+
+/* Pointer to a function to update the page database with a PTE address. */
+typedef void (*PFNSETPTEADDR)(UINT32, PHYSADDR, BOOL);
+
+/*------------------------------------
+ * Prototypes for the init functions.
+ *------------------------------------
  */
 
-SEG_INIT_CODE void _MmInit(PSTARTUP_INFO pstartup)
-{
-  IMalloc *pmInitHeap = _MmGetInitHeap();
-  _MmInitKernelSpace(pstartup, pmInitHeap);
-  _MmInitVMMap(pstartup, pmInitHeap);
-  _MmInitPageAlloc(pstartup);
-  IUnknown_Release(pmInitHeap);
-}
+extern IMalloc *_MmGetInitHeap(void);
+extern void _MmInitKernelSpace(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap);
+extern void _MmInitVMMap(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap);
+extern void _MmInitPageAlloc(PSTARTUP_INFO pstartup);
+
+/* secondary init function in the VM mapper */
+extern void _MmInitPTEMappings(PFNSETPTEADDR pfnSetPTEAddr);
+
+#endif /* __ASM__ */
+
+#endif /* __INITFUNCS_H_INCLUDED */

@@ -62,9 +62,6 @@ typedef struct tagVMCTXT {
   RBTREE rbtPageTables;      /* tree containing page tables this context owns */
 } VMCTXT, *PVMCTXT;
 
-/* Pointer to a function to update the page database with a PTE address. */
-typedef void (*PFNSETPTEADDR)(UINT32, PHYSADDR, BOOL);
-
 /* Invalid page return. */
 #define INVALID_PAGE         ((UINT32)(-1))
 

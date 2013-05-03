@@ -37,6 +37,7 @@
 #include <comrogue/internals/memmgr.h>
 #include <comrogue/internals/startup.h>
 #include <comrogue/internals/trace.h>
+#include "initfuncs.h"
 
 #ifdef THIS_FILE
 #undef THIS_FILE
@@ -348,9 +349,6 @@ SEG_INIT_CODE static UINT32 build_page_chain(UINT32 ndxFirstPage, UINT32 cpg, un
 /* External references to symbols defined by the linker script. */
 extern char cpgPrestartTotal, cpgLibraryCode, cpgKernelCode, cpgKernelData, cpgKernelBss, cpgInitCode,
   cpgInitData, cpgInitBss;
-
-/* secondary init function in the VM mapper */
-extern void _MmInitPTEMappings(PFNSETPTEADDR pfnSetPTEAddr);
 
 /*
  * Initializes the page allocator and the Master Page Database.
