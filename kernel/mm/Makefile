@@ -29,35 +29,16 @@
 #
 # "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
 MAKEFLAGS += -rR
-CRBASEDIR := $(abspath ..)
+CRBASEDIR := $(abspath ../..)
 include $(CRBASEDIR)/armcompile.mk
 
-RES_OBJS = lowlevel.o trace.o 
-INIT_OBJS = start.o kistart.o 
+MM_OBJS = memmgr.o vmmap.o pagealloc.o kernel_space.o
+MM_INIT_OBJS = init_heap.o
 
-all:	kernel.img
+all:	kernel-mm.o
 
-kernel.elf: prestart/kernel-prestart.o lib/kernel-lib.o $(RES_OBJS) $(INIT_OBJS) mm/kernel-mm.o kernel.lds
-	$(LD) -T kernel.lds prestart/kernel-prestart.o lib/kernel-lib.o $(RES_OBJS) $(INIT_OBJS) \
-		 mm/kernel-mm.o -o kernel.elf
-
-prestart/kernel-prestart.o:
-	make -C prestart
-
-lib/kernel-lib.o:
-	make -C lib
-
-mm/kernel-mm.o:
-	make -C mm
-
-kernel.img: kernel.elf
-	$(OBJDUMP) -D kernel.elf > kernel.list
-	$(OBJDUMP) -t kernel.elf > kernel.syms
-	sort kernel.syms > kernel.syms.sorted
-	$(OBJCOPY) kernel.elf -O binary kernel.img
+kernel-mm.o:	$(MM_OBJS) $(MM_INIT_OBJS) kernel-mm.lds
+	$(LD) -r -T kernel-mm.lds $(MM_OBJS) $(MM_INIT_OBJS) -o kernel-mm.o
 
 clean:
-	-rm *.o *.s *.lds kernel.img kernel.elf kernel.list kernel.syms*
-	make -C prestart clean
-	make -C lib clean
-	make -C mm clean
+	-rm *.o *.s *.lds
