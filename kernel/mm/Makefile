@@ -32,7 +32,7 @@ MAKEFLAGS += -rR
 CRBASEDIR := $(abspath ../..)
 include $(CRBASEDIR)/armcompile.mk
 
-MM_OBJS = memmgr.o vmmap.o pagealloc.o kernel_space.o
+MM_OBJS = lowlevel.o memmgr.o vmmap.o pagealloc.o kernel_space.o
 MM_INIT_OBJS = init_heap.o
 
 all:	kernel-mm.o
