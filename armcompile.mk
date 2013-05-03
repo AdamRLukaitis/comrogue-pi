@@ -50,7 +50,7 @@ AFLAGS := -mcpu=arm1176jzf-s -mfloat-abi=hard
 ASM_CPP_FLAGS := $(INCLUDES) $(DEFS) -D__ASM__
 
 # Standard rule for pre-processing linker script files.
-%.lds: %.Lds
+%.lds: %.ldi
 	$(CPP) $(ASM_CPP_FLAGS) -P -o $@ $<
 
 # Standard rule for preprocessing and assembling assembler files.

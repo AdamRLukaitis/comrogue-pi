@@ -60,8 +60,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /* Taken from FreeBSD memcmp.S, munged by Erbo to COMROGUE standards */
-.section ".lib.text"
-	
 /* Func: INT32 StrCompareMem(PCVOID pMem1, PCVOID pMem2, SSIZE_T cb); */
 /*
  * Compares two memory blocks as bytes, returning a value for comparison between the two.

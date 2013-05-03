@@ -35,9 +35,8 @@
  * AND in this order.
  *------------------------------------------------------------------------------------------------------
  */
-#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/internals/seg.h>
-#define GUIDATTR SEG_LIB_RODATA
+#define GUIDATTR SEG_RODATA
 #define INITGUID
 #include <comrogue/object_definition_macros.h>
 

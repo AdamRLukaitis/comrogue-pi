@@ -64,8 +64,6 @@
  * SUCH DAMAGE.
  */
 /* Taken from FreeBSD memset.S, munged by Erbo to COMROGUE standards */
-.section ".lib.text"
-
 /* FUNC: PVOID StrSetMem(PVOID pMem, INT32 ch, SSIZE_T cb); */
 /*
  * Fills a block of memory with a constant byte value.

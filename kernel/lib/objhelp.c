@@ -29,7 +29,6 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/scode.h>
 #include <comrogue/str.h>
@@ -38,7 +37,6 @@
 #include <comrogue/allocator.h>
 #include <comrogue/stdobj.h>
 #include <comrogue/objhelp.h>
-#include <comrogue/internals/seg.h>
 
 /*--------------------------------------------
  * Standard object functions (API-type calls)
@@ -55,7 +53,7 @@
  * Returns:
  * TRUE if the GUIDs are equal, FALSE otherwise.
  */
-SEG_LIB_CODE BOOL IsEqualGUID(REFGUID guid1, REFGUID guid2)
+BOOL IsEqualGUID(REFGUID guid1, REFGUID guid2)
 {
   return MAKEBOOL(StrCompareMem(guid1, guid2, sizeof(GUID)) == 0);
 }
@@ -83,7 +81,7 @@ SEG_LIB_CODE BOOL IsEqualGUID(REFGUID guid1, REFGUID guid2)
  */
 /* This macro makes a ObjHlpStandardQueryInterface_IXXX function for any interface directly derived from IUnknown */
 #define MAKE_BASE_QI(iface) \
-SEG_LIB_CODE HRESULT ObjHlpStandardQueryInterface_ ## iface (IUnknown *pThis, REFIID riid, PPVOID ppvObject) \
+HRESULT ObjHlpStandardQueryInterface_ ## iface (IUnknown *pThis, REFIID riid, PPVOID ppvObject) \
 { \
   if (!ppvObject) return E_POINTER; \
   *ppvObject = NULL; \
@@ -105,7 +103,7 @@ MAKE_BASE_QI(IMalloc)
  * Returns:
  * 1.
  */
-SEG_LIB_CODE UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis)
+UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis)
 {
   return 1;
 }
@@ -119,7 +117,7 @@ SEG_LIB_CODE UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis)
  * Returns:
  * Nothing.
  */
-SEG_LIB_CODE void ObjHlpDoNothingReturnVoid(IUnknown *pThis)
+void ObjHlpDoNothingReturnVoid(IUnknown *pThis)
 {
   /* do nothing */
 }

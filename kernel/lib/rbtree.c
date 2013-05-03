@@ -29,10 +29,8 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/internals/rbtree.h>
-#include <comrogue/internals/seg.h>
 #include <comrogue/internals/trace.h>
 
 #ifdef THIS_FILE
@@ -62,7 +60,7 @@ DECLARE_THIS_FILE
  * 0 if the keys are equal; an integer less than 0 if k1 is less than k2; an integer greater than 0 if
  * k1 is greater than k2.
  */
-SEG_LIB_CODE INT32 RbtStdCompareByValue(TREEKEY k1, TREEKEY k2)
+INT32 RbtStdCompareByValue(TREEKEY k1, TREEKEY k2)
 {
   if (k1 == k2)
     return 0;
@@ -81,7 +79,7 @@ SEG_LIB_CODE INT32 RbtStdCompareByValue(TREEKEY k1, TREEKEY k2)
  * Returns:
  * Pointer to the new root node of the subtree after the rotation.
  */
-SEG_LIB_CODE static PRBTREENODE rotate_left(PRBTREENODE ptn)
+static PRBTREENODE rotate_left(PRBTREENODE ptn)
 {
   register PRBTREENODE ptnNewRoot = rbtNodeRight(ptn);
   ASSERT(ptnNewRoot);
@@ -102,7 +100,7 @@ SEG_LIB_CODE static PRBTREENODE rotate_left(PRBTREENODE ptn)
  * Returns:
  * Pointer to the new root node of the subtree after the rotation.
  */
-SEG_LIB_CODE static PRBTREENODE rotate_right(PRBTREENODE ptn)
+static PRBTREENODE rotate_right(PRBTREENODE ptn)
 {
   register PRBTREENODE ptnNewRoot = ptn->ptnLeft;
   ASSERT(ptnNewRoot);
@@ -122,7 +120,7 @@ SEG_LIB_CODE static PRBTREENODE rotate_right(PRBTREENODE ptn)
  * Returns:
  * Nothing.
  */
-SEG_LIB_CODE static void color_flip(PRBTREENODE ptn)
+static void color_flip(PRBTREENODE ptn)
 {
   rbtToggleColor(ptn);
   rbtToggleColor(ptn->ptnLeft);
@@ -139,7 +137,7 @@ SEG_LIB_CODE static void color_flip(PRBTREENODE ptn)
  * Returns:
  * Pointer to the new root node of the subtree after fixup is performed.
  */
-SEG_LIB_CODE static PRBTREENODE fix_up(PRBTREENODE ptn)
+static PRBTREENODE fix_up(PRBTREENODE ptn)
 {
   if (rbtIsRed(rbtNodeRight(ptn)) && !rbtIsRed(ptn->ptnLeft))
     ptn = rotate_left(ptn);
@@ -167,7 +165,7 @@ SEG_LIB_CODE static PRBTREENODE fix_up(PRBTREENODE ptn)
  * This function is recursive; however, the nature of the tree guarantees that the stack space consumed
  * by its stack frames will be O(log n).
  */
-SEG_LIB_CODE static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurrent, PRBTREENODE ptnNew)
+static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurrent, PRBTREENODE ptnNew)
 {
   register int cmp;  /* compare result */
 
@@ -194,7 +192,7 @@ SEG_LIB_CODE static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurre
  * Returns:
  * Nothing.
  */
-SEG_LIB_CODE void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew)
+void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew)
 {
   ptree->ptnRoot = insert_under(ptree, ptree->ptnRoot, ptnNew);
   rbtSetNodeColor(ptree->ptnRoot, BLACK);
@@ -210,7 +208,7 @@ SEG_LIB_CODE void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew)
  * Returns:
  * Pointer to the node where the key is found, or NULL if not found.
  */
-SEG_LIB_CODE PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key)
+PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key)
 {
   register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
   register int cmp;  /* compare result */
@@ -241,7 +239,7 @@ SEG_LIB_CODE PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key)
  * Pointer to the node where the key is found, or pointer to the predecessor node, or NULL if the key
  * is less than every key in the tree and hence has no predecessor.
  */
-SEG_LIB_CODE PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
+PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
 {
   register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
   register int cmp;  /* compare result */
@@ -276,7 +274,7 @@ SEG_LIB_CODE PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
  * Pointer to the node where the key is found, or pointer to the successor node, or NULL if the key
  * is greater than every key in the tree and hence has no successor.
  */
-SEG_LIB_CODE PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key)
+PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key)
 {
   register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
   register int cmp;  /* compare result */
@@ -308,7 +306,7 @@ SEG_LIB_CODE PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key)
  * Returns:
  * Pointer to the leftmost node in the subtree.
  */
-SEG_LIB_CODE static PRBTREENODE find_min(PRBTREENODE ptn)
+static PRBTREENODE find_min(PRBTREENODE ptn)
 {
   while (ptn->ptnLeft)
     ptn = ptn->ptnLeft;
@@ -324,7 +322,7 @@ SEG_LIB_CODE static PRBTREENODE find_min(PRBTREENODE ptn)
  * Returns:
  * Pointer to the leftmost node in the tree. If the tree has no nodes, NULL is returned.
  */
-SEG_LIB_CODE PRBTREENODE RbtFindMin(PRBTREE ptree)
+PRBTREENODE RbtFindMin(PRBTREE ptree)
 {
   return ptree->ptnRoot ? find_min(ptree->ptnRoot) : NULL;
 }
@@ -340,7 +338,7 @@ SEG_LIB_CODE PRBTREENODE RbtFindMin(PRBTREE ptree)
  * Returns:
  * Pointer to root of subtree after fixup.
  */
-SEG_LIB_CODE static PRBTREENODE move_red_left(PRBTREENODE ptn)
+static PRBTREENODE move_red_left(PRBTREENODE ptn)
 {
   color_flip(ptn);
   if (rbtNodeRight(ptn) && rbtIsRed(rbtNodeRight(ptn)->ptnLeft))
@@ -361,7 +359,7 @@ SEG_LIB_CODE static PRBTREENODE move_red_left(PRBTREENODE ptn)
  * Returns:
  * Pointer to root of subtree after fixup.
  */
-SEG_LIB_CODE static PRBTREENODE move_red_right(PRBTREENODE ptn)
+static PRBTREENODE move_red_right(PRBTREENODE ptn)
 {
   color_flip(ptn);
   if (ptn->ptnLeft && rbtIsRed(ptn->ptnLeft->ptnLeft))
@@ -386,7 +384,7 @@ SEG_LIB_CODE static PRBTREENODE move_red_right(PRBTREENODE ptn)
  * This function is recursive; however, the nature of the tree guarantees that the stack space consumed
  * by its stack frames will be O(log n).
  */
-SEG_LIB_CODE static PRBTREENODE delete_min(PRBTREENODE ptn)
+static PRBTREENODE delete_min(PRBTREENODE ptn)
 {
   if (!(ptn->ptnLeft))
     return rbtNodeRight(ptn);
@@ -412,7 +410,7 @@ SEG_LIB_CODE static PRBTREENODE delete_min(PRBTREENODE ptn)
  * This function is recursive; however, the nature of the tree guarantees that the stack space consumed
  * by its stack frames (and those of delete_min, where we call it) will be O(log n).
  */
-SEG_LIB_CODE static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptnCurrent, TREEKEY key)
+static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptnCurrent, TREEKEY key)
 {
   register int cmp = (*(ptree->pfnTreeCompare))(key, ptnCurrent->treekey);
   if (cmp < 0)
@@ -467,7 +465,7 @@ SEG_LIB_CODE static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptn
  * Returns:
  * Nothing.
  */
-SEG_LIB_CODE void RbtDelete(PRBTREE ptree, TREEKEY key)
+void RbtDelete(PRBTREE ptree, TREEKEY key)
 {
   ptree->ptnRoot = delete_from_under(ptree, ptree->ptnRoot, key);
   if (ptree->ptnRoot)
@@ -491,7 +489,7 @@ SEG_LIB_CODE void RbtDelete(PRBTREE ptree, TREEKEY key)
  * This function is recursive; however, the nature of the tree guarantees that the stack space consumed
  * by its stack frames will be O(log n).
  */
-SEG_LIB_CODE static BOOL do_walk(PRBTREE ptree, PRBTREENODE ptn, PFNRBTWALK pfnWalk, PVOID pData)
+static BOOL do_walk(PRBTREE ptree, PRBTREENODE ptn, PFNRBTWALK pfnWalk, PVOID pData)
 {
   register BOOL rc = TRUE;
   if (ptn->ptnLeft)
@@ -515,7 +513,7 @@ SEG_LIB_CODE static BOOL do_walk(PRBTREE ptree, PRBTREENODE ptn, PFNRBTWALK pfnW
  * Returns:
  * TRUE if the tree was entirely traversed, FALSE if the tree walk was interrupted.
  */
-SEG_LIB_CODE BOOL RbtWalk(PRBTREE ptree, PFNRBTWALK pfnWalk, PVOID pData)
+BOOL RbtWalk(PRBTREE ptree, PFNRBTWALK pfnWalk, PVOID pData)
 {
   return (ptree->ptnRoot ? do_walk(ptree, ptree->ptnRoot, pfnWalk, pData) : TRUE);
 }

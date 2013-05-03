@@ -31,7 +31,6 @@
  * SUCH DAMAGE.
  */
 /* Derived from FreeBSD libkern qdivrem.c, munged by Erbo to COMROGUE standards */
-#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/internals/seg.h>
 #include "quad.h"
@@ -54,7 +53,7 @@ typedef UINT16 DIGIT;
  * `fall out' the left (there never will be any such anyway).
  * We may assume len >= 0.  NOTE THAT THIS WRITES len+1 DIGITS.
  */
-SEG_LIB_CODE static void __shl(register DIGIT *p, register INT32 len, register INT32 sh)
+static void __shl(register DIGIT *p, register INT32 len, register INT32 sh)
 {
   register INT32 i;
 
@@ -71,7 +70,7 @@ SEG_LIB_CODE static void __shl(register DIGIT *p, register INT32 len, register I
  * divisor are 4 `digits' in this base (they are shorter if they have
  * leading zeros).
  */
-SEG_LIB_CODE UINT64 __qdivrem(UINT64 uq, UINT64 vq, PUINT64 pRem)
+UINT64 __qdivrem(UINT64 uq, UINT64 vq, PUINT64 pRem)
 {
   UU tmp;
   DIGIT *u, *v, *q;
@@ -85,7 +84,7 @@ SEG_LIB_CODE UINT64 __qdivrem(UINT64 uq, UINT64 vq, PUINT64 pRem)
    */
   if (vq == 0)
   { /* divide by zero. */
-    SEG_LIB_RODATA static volatile const unsigned int zero = 0;
+    SEG_RODATA static volatile const unsigned int zero = 0;
 
     tmp.ul[H] = tmp.ul[L] = 1 / zero;
     if (pRem)

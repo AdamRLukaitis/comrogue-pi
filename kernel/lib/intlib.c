@@ -29,10 +29,8 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/intlib.h>
-#include <comrogue/internals/seg.h>
 #include "quad.h"
 
 /*---------------------------
@@ -55,7 +53,7 @@
  * Returns:
  * Standard SUCCEEDED/FAILED HRESULT.
  */
-SEG_LIB_CODE HRESULT IntLDiv(PLDIV pResult, INT64 num, INT64 denom)
+HRESULT IntLDiv(PLDIV pResult, INT64 num, INT64 denom)
 {
   UINT32 mode = 0;
   if (denom == 0)

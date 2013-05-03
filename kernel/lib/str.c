@@ -29,7 +29,6 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#define __COMROGUE_KERNEL_LIB__
 #include <comrogue/types.h>
 #include <comrogue/scode.h>
 #include <comrogue/intlib.h>
@@ -50,7 +49,7 @@
  * Returns:
  * TRUE if the character is a digit, FALSE otherwise.
  */
-SEG_LIB_CODE BOOL StrIsDigit8(CHAR ch)
+BOOL StrIsDigit8(CHAR ch)
 {
   /* TODO: replace with something nicer later */
   return MAKEBOOL((ch >= '0') && (ch <= '9'));
@@ -65,7 +64,7 @@ SEG_LIB_CODE BOOL StrIsDigit8(CHAR ch)
  * Returns:
  * The length of the string in characters.
  */
-SEG_LIB_CODE INT32 StrLength8(PCSTR psz)
+INT32 StrLength8(PCSTR psz)
 {
   register PCSTR p = psz;
   while (*p)
@@ -83,7 +82,7 @@ SEG_LIB_CODE INT32 StrLength8(PCSTR psz)
  * Returns:
  * NULL if character was not found, otherwise pointer to character within string.
  */
-SEG_LIB_CODE PCHAR StrChar8(PCSTR psz, INT32 ch)
+PCHAR StrChar8(PCSTR psz, INT32 ch)
 {
   const CHAR mych = ch;
   for (; *psz; psz++)
@@ -113,11 +112,10 @@ SEG_LIB_CODE PCHAR StrChar8(PCSTR psz, INT32 ch)
  * A pointer to the first digit of the converted value, which will be somewhere in the interval
  * [pchBuf, pchBuf + nBytes).
  */
-SEG_LIB_CODE static PCHAR convert_number_engine8(UINT64 value, PCHAR pchBuf, INT32 nBytes, INT32 nBase,
-						 BOOL fUppercase)
+static PCHAR convert_number_engine8(UINT64 value, PCHAR pchBuf, INT32 nBytes, INT32 nBase, BOOL fUppercase)
 {
-  static DECLARE_LIB_STRING8_CONST(szDigitsUppercase, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-  static DECLARE_LIB_STRING8_CONST(szDigitsLowercase, "0123456789abcdefghijklmnopqrstuvwxyz");
+  static DECLARE_STRING8_CONST(szDigitsUppercase, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  static DECLARE_STRING8_CONST(szDigitsLowercase, "0123456789abcdefghijklmnopqrstuvwxyz");
   PCSTR pszDigits = (fUppercase ? szDigitsUppercase : szDigitsLowercase);  /* digit set to use */
   PCHAR p = pchBuf + nBytes;     /* output pointer */
   INT64 accumulator;             /* accumulator of quotients */
@@ -154,8 +152,8 @@ SEG_LIB_CODE static PCHAR convert_number_engine8(UINT64 value, PCHAR pchBuf, INT
 	 else { errorFlag = SEVERITY_ERROR; goto error; } } } while (0)
 
 /* Strings used for padding */
-static DECLARE_LIB_STRING8_CONST(szPadSpace, "                                                          ");
-static DECLARE_LIB_STRING8_CONST(szPadZero,  "0000000000000000000000000000000000000000000000000000000000");
+static DECLARE_STRING8_CONST(szPadSpace, "                                                          ");
+static DECLARE_STRING8_CONST(szPadZero,  "0000000000000000000000000000000000000000000000000000000000");
 
 #define PAD_SIZE (sizeof(szPadSpace) - 1)    /* number of characters available in pad string */
 
@@ -183,12 +181,12 @@ static DECLARE_LIB_STRING8_CONST(szPadZero,  "0000000000000000000000000000000000
  * Notes:
  * Floating-point conversion formats are not supported at this time.
  */
-SEG_LIB_CODE HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs)
+HRESULT StrFormatV8(PFNFORMAT8 pfnFormat, PVOID pArg, PCSTR pszFormat, va_list pargs)
 {
-  static DECLARE_LIB_STRING8_CONST(szFlagChars, "0+- #");   /* flag characters and values */
-  static const UINT32 SEG_LIB_RODATA auiFlagValues[] =
+  static DECLARE_STRING8_CONST(szFlagChars, "0+- #");   /* flag characters and values */
+  static const UINT32 SEG_RODATA auiFlagValues[] =
       { FLAG_ZEROPAD, FLAG_LEFTJUST, FLAG_PLUSSIGN, FLAG_SPACESIGN, FLAG_ALTMODE, 0 };
-  static DECLARE_LIB_STRING8_CONST(szConversionChars, "hl");  /* conversion characters */
+  static DECLARE_STRING8_CONST(szConversionChars, "hl");  /* conversion characters */
   PCSTR p;                               /* pointer used to walk the format string */
   PCHAR pFlag;                           /* pointer to flag character/temp buffer pointer */
   PCHAR pchOutput;                       /* pointer to characters actually output */

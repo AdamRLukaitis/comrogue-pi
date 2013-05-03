@@ -29,27 +29,15 @@
 #
 # "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
 MAKEFLAGS += -rR
-CRBASEDIR := $(abspath ..)
+CRBASEDIR := $(abspath ../..)
 include $(CRBASEDIR)/armcompile.mk
 
-PRESTART_OBJS = prestart.o early_trace.o collect_startup.o early_mm.o
-RES_OBJS = lowlevel.o trace.o memmgr.o vmmap.o pagealloc.o kernel_space.o
-INIT_OBJS = start.o kistart.o init_heap.o
+LIB_OBJS = divide.o qdivrem.o intlib.o objhelp.o rbtree.o str.o strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
 
-all:	kernel.img
+all:	kernel-lib.o
 
-kernel.elf: $(PRESTART_OBJS) lib/kernel-lib.o $(RES_OBJS) $(INIT_OBJS) kernel.lds
-	$(LD) -T kernel.lds $(PRESTART_OBJS) lib/kernel-lib.o $(RES_OBJS) $(INIT_OBJS) -o kernel.elf
-
-lib/kernel-lib.o:
-	make -C lib
-
-kernel.img: kernel.elf
-	$(OBJDUMP) -D kernel.elf > kernel.list
-	$(OBJDUMP) -t kernel.elf > kernel.syms
-	sort kernel.syms > kernel.syms.sorted
-	$(OBJCOPY) kernel.elf -O binary kernel.img
+kernel-lib.o: $(LIB_OBJS) kernel-lib.lds
+	$(LD) -r -T kernel-lib.lds $(LIB_OBJS) -o kernel-lib.o
 
 clean:
-	-rm *.o *.s *.lds kernel.img kernel.elf kernel.list kernel.syms*
-	make -C lib clean
+	-rm *.o *.s *.lds

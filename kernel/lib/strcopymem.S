@@ -27,8 +27,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /* Taken from FreeBSD memcpy_arm.S, munged by Erbo to COMROGUE standards */
-.section ".lib.text"
-
 /*
  * This is one fun bit of code ...
  * Some easy listening music is suggested while trying to understand this

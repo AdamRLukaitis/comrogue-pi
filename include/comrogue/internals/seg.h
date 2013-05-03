@@ -49,8 +49,6 @@
 #define SEG_INIT_DATA    __attribute__((__section__(".prestart.data")))
 #define SEG_INIT_RODATA  __attribute__((__section__(".prestart.rodata")))
 #define SEG_RODATA       SEG_INIT_RODATA
-#define SEG_LIB_CODE     SEG_INIT_CODE
-#define SEG_LIB_RODATA   SEG_INIT_RODATA
 
 #else
 
@@ -58,8 +56,6 @@
 #define SEG_INIT_DATA    __attribute__((__section__(".init.data")))
 #define SEG_INIT_RODATA  __attribute__((__section__(".init.rodata")))
 #define SEG_RODATA       __attribute__((__section__(".rodata")))
-#define SEG_LIB_CODE     __attribute__((__section__(".lib.text")))
-#define SEG_LIB_RODATA   __attribute__((__section__(".lib.rodata")))
 
 #endif  /* __COMROGUE_PRESTART__ */
 
@@ -70,7 +66,6 @@
 
 #define DECLARE_STRING8_CONST_STGCLASS(name, value, stgclass) const CHAR stgclass name [] = value
 #define DECLARE_INIT_STRING8_CONST(name, value) DECLARE_STRING8_CONST_STGCLASS(name, value, SEG_INIT_RODATA)
-#define DECLARE_LIB_STRING8_CONST(name, value) DECLARE_STRING8_CONST_STGCLASS(name, value, SEG_LIB_RODATA)
 #define DECLARE_STRING8_CONST(name, value) DECLARE_STRING8_CONST_STGCLASS(name, value, SEG_RODATA)
 
 #endif  /* __ASM__ */

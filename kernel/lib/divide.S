@@ -32,8 +32,6 @@
  * SUCH DAMAGE.
  */
 /* Derived from FreeBSD libkern divsi3.S, uldivmod.S, and ldivmod.S, munged by Erbo to COMROGUE standards */
-.section ".lib.text"
-	
 .globl	__aeabi_uidiv
 .globl	__aeabi_uidivmod
 __aeabi_uidiv:
