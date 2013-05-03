@@ -35,7 +35,7 @@
 #include <comrogue/allocator.h>
 #include <comrogue/objhelp.h>
 #include <comrogue/internals/seg.h>
-#include "sizes.h"
+#include <comrogue/internals/layout.h>
 
 /*-------------------------------------------------------------------------------------------------------------
  * Initial heap implementation.  Since this will only be used by initializer code and freed with the rest

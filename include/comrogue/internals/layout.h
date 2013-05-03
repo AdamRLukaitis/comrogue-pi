@@ -48,6 +48,14 @@
 #define PAGE_COUNT_IO            4096                 /* 16 megabytes mapped for IO */
 #define VMADDR_KERNEL_NOMANS     0xFFFF0000           /* start of kernel "no man's land" */
 
+/*------------------------------------
+ * Sizes of internal data structures.
+ *------------------------------------
+ */
+
+#define SIZE_INIT_STACK          4096                 /* size of the initial stack */
+#define SIZE_INIT_HEAP           16384                /* size of the initial heap */
+
 #endif /* __COMROGUE_INTERNALS__ */
 
 #endif /* __LAYOUT_H_INCLUDED */

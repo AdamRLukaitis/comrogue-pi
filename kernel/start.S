@@ -31,7 +31,6 @@
  */
 #include <comrogue/internals/layout.h>
 #include <comrogue/internals/sctlr.h>
-#include "sizes.h"
 	
 .section ".first.init.text"
 
