@@ -29,30 +29,15 @@
 #
 # "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
 MAKEFLAGS += -rR
-CRBASEDIR := $(abspath ..)
+CRBASEDIR := $(abspath ../..)
 include $(CRBASEDIR)/armcompile.mk
 
-RES_OBJS = lowlevel.o trace.o memmgr.o vmmap.o pagealloc.o kernel_space.o
-INIT_OBJS = start.o kistart.o init_heap.o
+PRESTART_OBJS = prestart.o early_trace.o collect_startup.o early_mm.o
 
-all:	kernel.img
+all:	kernel-prestart.o
 
-kernel.elf: prestart/kernel-prestart.o lib/kernel-lib.o $(RES_OBJS) $(INIT_OBJS) kernel.lds
-	$(LD) -T kernel.lds prestart/kernel-prestart.o lib/kernel-lib.o $(RES_OBJS) $(INIT_OBJS) -o kernel.elf
-
-prestart/kernel-prestart.o:
-	make -C prestart
-
-lib/kernel-lib.o:
-	make -C lib
-
-kernel.img: kernel.elf
-	$(OBJDUMP) -D kernel.elf > kernel.list
-	$(OBJDUMP) -t kernel.elf > kernel.syms
-	sort kernel.syms > kernel.syms.sorted
-	$(OBJCOPY) kernel.elf -O binary kernel.img
+kernel-prestart.o:	$(PRESTART_OBJS) kernel-prestart.lds
+	$(LD) -r -T kernel-prestart.lds $(PRESTART_OBJS) -o kernel-prestart.o
 
 clean:
-	-rm *.o *.s *.lds kernel.img kernel.elf kernel.list kernel.syms*
-	make -C prestart clean
-	make -C lib clean
+	-rm *.o *.s *.lds

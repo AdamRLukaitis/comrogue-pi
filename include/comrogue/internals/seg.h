@@ -43,21 +43,10 @@
  *----------------------
  */
 
-#ifdef __COMROGUE_PRESTART__
-
-#define SEG_INIT_CODE    __attribute__((__section__(".prestart.text")))
-#define SEG_INIT_DATA    __attribute__((__section__(".prestart.data")))
-#define SEG_INIT_RODATA  __attribute__((__section__(".prestart.rodata")))
-#define SEG_RODATA       SEG_INIT_RODATA
-
-#else
-
 #define SEG_INIT_CODE    __attribute__((__section__(".init.text")))
 #define SEG_INIT_DATA    __attribute__((__section__(".init.data")))
 #define SEG_INIT_RODATA  __attribute__((__section__(".init.rodata")))
 #define SEG_RODATA       __attribute__((__section__(".rodata")))
-
-#endif  /* __COMROGUE_PRESTART__ */
 
 /*------------------------------------
  * String constant declaration macros

@@ -87,7 +87,7 @@ CDECL_END
 
 #define THIS_FILE __FILE__
 
-#if defined(__COMROGUE_PRESTART__) || defined(__COMROGUE_INIT__)
+#if defined(__COMROGUE_INIT__)
 #define DECLARE_THIS_FILE     static DECLARE_INIT_STRING8_CONST(THIS_FILE, __FILE__);
 #else
 #define DECLARE_THIS_FILE     static DECLARE_STRING8_CONST(THIS_FILE, __FILE__);

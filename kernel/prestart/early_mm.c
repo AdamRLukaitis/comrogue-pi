@@ -31,7 +31,6 @@
  */
 #define __COMROGUE_PRESTART__
 #include <comrogue/types.h>
-#include <comrogue/internals/seg.h>
 #include <comrogue/internals/layout.h>
 #include <comrogue/internals/mmu.h>
 #include <comrogue/internals/startup.h>
@@ -48,11 +47,11 @@ DECLARE_THIS_FILE
  */
 
 /* Data stored in here temporarily and reflected back to startup info when we're done. */
-SEG_INIT_DATA static PTTB g_pTTB = NULL;              /* pointer to TTB */
-SEG_INIT_DATA static PTTBAUX g_pTTBAux = NULL;        /* pointer to TTB auxiliary data */
-SEG_INIT_DATA static UINT32 g_cpgForPageTables = 0;   /* number of pages being used for page tables */
-SEG_INIT_DATA static UINT32 g_ctblFreeonLastPage = 0; /* number of page tables free on last page */
-SEG_INIT_DATA static PPAGETAB g_ptblNext = NULL;      /* pointer to next free page table */
+static PTTB g_pTTB;                 /* pointer to TTB */
+static PTTBAUX g_pTTBAux;           /* pointer to TTB auxiliary data */
+static UINT32 g_cpgForPageTables;   /* number of pages being used for page tables */
+static UINT32 g_ctblFreeonLastPage; /* number of page tables free on last page */
+static PPAGETAB g_ptblNext;         /* pointer to next free page table */
 
 /*
  * Morphs the "flags" bits used for a page table entry in the TTB and for a page entry in the page table
@@ -66,7 +65,7 @@ SEG_INIT_DATA static PPAGETAB g_ptblNext = NULL;      /* pointer to next free pa
  * The flag bits that would be used for a section entry in the TTB.  If a bit or option is set
  * in either uiTableFlags or uiPageFlags, it will be set in the appropriate place in the result.
  */
-SEG_INIT_CODE static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPageFlags)
+static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPageFlags)
 {
   register UINT32 rc = TTBSEC_ALWAYS;
   rc |= ((uiTableFlags & TTBPGTBL_PXN) >> 2);
@@ -93,7 +92,7 @@ SEG_INIT_CODE static UINT32 make_section_flags(UINT32 uiTableFlags, UINT32 uiPag
  * Returns:
  * TTB auxiliary flag bits that would be used for a TTB entry.
  */
-SEG_INIT_CODE static UINT32 make_section_aux_flags(UINT32 uiPageAuxFlags)
+static UINT32 make_section_aux_flags(UINT32 uiPageAuxFlags)
 {
   register UINT32 rc = uiPageAuxFlags & (PGAUX_SACRED|PGAUX_UNWRITEABLE);
   /* TODO if we define any other flags */
@@ -115,7 +114,7 @@ SEG_INIT_CODE static UINT32 make_section_aux_flags(UINT32 uiPageAuxFlags)
  * Side effects:
  * Modifies the global variables g_cpgForPageTables, g_ctblFreeonLastPage, and g_ptblNext.
  */
-SEG_INIT_CODE static PPAGETAB alloc_page_table(PTTB pTTBEntry, PTTBAUX pAuxEntry, UINT32 uiTableFlags)
+static PPAGETAB alloc_page_table(PTTB pTTBEntry, PTTBAUX pAuxEntry, UINT32 uiTableFlags)
 {
   register PPAGETAB pTab;   /* pointer to new page table */
   register UINT32 i;        /* loop counter */
@@ -159,8 +158,8 @@ SEG_INIT_CODE static PPAGETAB alloc_page_table(PTTB pTTBEntry, PTTBAUX pAuxEntry
  * table that the TTB entry points to, where applicable.  If we need to allocate a new page table, may modify the
  * global variables g_cpgForPageTables, g_ctblFreeonLastPage, and g_ptblNext.
  */
-SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, PTTBAUX pAuxEntry, INT32 ndxPage,
-				       INT32 cpg, UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags)
+static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, PTTBAUX pAuxEntry, INT32 ndxPage,
+			 INT32 cpg, UINT32 uiTableFlags, UINT32 uiPageFlags, UINT32 uiAuxFlags)
 {
   INT32 cpgCurrent;    /* number of pages we're mapping */
   PPAGETAB pTab;       /* pointer to current or new page table */
@@ -229,15 +228,15 @@ SEG_INIT_CODE static INT32 alloc_pages(PHYSADDR paBase, PTTB pTTBEntry, PTTBAUX 
  * where applicable.  If we need to allocate new page tables, may modify the global variables g_cpgForPageTables,
  * g_ctblFreeonLastPage, and g_ptblNext.
  */
-SEG_INIT_CODE static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg, UINT32 uiTableFlags,
-				    UINT32 uiPageFlags, UINT32 uiAuxFlags)
+static BOOL map_pages(PHYSADDR paBase, KERNADDR vmaBase, INT32 cpg, UINT32 uiTableFlags,
+		      UINT32 uiPageFlags, UINT32 uiAuxFlags)
 {
-  static DECLARE_INIT_STRING8_CONST(sz1, "Map ");
-  static DECLARE_INIT_STRING8_CONST(sz2, "->");
-  static DECLARE_INIT_STRING8_CONST(sz3, ",cpg=");
-  static DECLARE_INIT_STRING8_CONST(sz4, ",tf="); 
-  static DECLARE_INIT_STRING8_CONST(sz5, ",pf=");
-  static DECLARE_INIT_STRING8_CONST(sz6, ",af=");
+  static DECLARE_STRING8_CONST(sz1, "Map ");
+  static DECLARE_STRING8_CONST(sz2, "->");
+  static DECLARE_STRING8_CONST(sz3, ",cpg=");
+  static DECLARE_STRING8_CONST(sz4, ",tf="); 
+  static DECLARE_STRING8_CONST(sz5, ",pf=");
+  static DECLARE_STRING8_CONST(sz6, ",af=");
   INT32 ndxTTB = mmVMA2TTBIndex(vmaBase);       /* TTB entry index */
   INT32 ndxPage = mmVMA2PGTBLIndex(vmaBase);    /* starting page entry index */
   INT32 cpgCurrent;                             /* current number of pages mapped */
@@ -358,12 +357,12 @@ extern char paFirstFree, cpgPrestartTotal, paLibraryCode, vmaLibraryCode, cpgLib
  * Modifies physical memory beyond the end of the kernel to store TTB and page tables.  Uses several
  * static globals in this module for work space while performing memory mappings.
  */
-SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
+PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
 {
-  static DECLARE_INIT_STRING8_CONST(szTTBAt, "EMmInit: TTB1@");
+  static DECLARE_STRING8_CONST(szTTBAt, "EMmInit: TTB1@");
 #if 0
-  static DECLARE_INIT_STRING8_CONST(szPageTable, "Page table pages:");
-  static DECLARE_INIT_STRING8_CONST(szFree, "\nFree last page:");
+  static DECLARE_STRING8_CONST(szPageTable, "Page table pages:");
+  static DECLARE_STRING8_CONST(szFree, "\nFree last page:");
 #endif
   PHYSADDR paTTB = (PHYSADDR)(&paFirstFree);  /* location of the system TTB1 */
   UINT32 cbMPDB;                              /* number of bytes in the MPDB */
@@ -406,6 +405,7 @@ SEG_INIT_CODE PHYSADDR EMmInit(PSTARTUP_INFO pstartup)
   /* Initialize the "next page table" pointer. */
   pstartup->paFirstPageTable = pstartup->paMPDB + cbMPDB;
   g_ptblNext = (PPAGETAB)(pstartup->paFirstPageTable);
+  g_cpgForPageTables = g_ctblFreeonLastPage = 0;
   
   /* Map the "prestart" area (everything below load address, plus prestart code & data) as identity. */
   VERIFY(map_pages(0, 0, (INT32)(&cpgPrestartTotal), TTBPGTBL_ALWAYS, PGTBLSM_ALWAYS | PGTBLSM_AP01, 0));

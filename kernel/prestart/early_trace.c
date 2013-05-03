@@ -39,7 +39,7 @@
 #include <comrogue/internals/trace.h>
 
 /* Hex digits. */
-static DECLARE_INIT_STRING8_CONST(szHexDigits, "0123456789ABCDEF");
+static DECLARE_STRING8_CONST(szHexDigits, "0123456789ABCDEF");
 
 /*
  * Initializes the trace functionality (the aux UART).
@@ -53,7 +53,7 @@ static DECLARE_INIT_STRING8_CONST(szHexDigits, "0123456789ABCDEF");
  * Side effects:
  * GPIO 14 configured for output from UART1; UART1 initialized to 115200 8N1 and enabled for output.
  */
-SEG_INIT_CODE void ETrInit(void)
+void ETrInit(void)
 {
   register UINT32 ra;
 
@@ -90,7 +90,7 @@ SEG_INIT_CODE void ETrInit(void)
  * Side effects:
  * Character written to UART1.
  */
-SEG_INIT_CODE static void write_trace(UINT32 c)
+static void write_trace(UINT32 c)
 {
   register UINT32 lsr = llIORead(AUX_MU_REG_LSR);
   while (!(lsr & U16550_LSR_TXEMPTY))
@@ -110,7 +110,7 @@ SEG_INIT_CODE static void write_trace(UINT32 c)
  * Side effects:
  * Either 1 or 2 characters written to UART1.
  */
-SEG_INIT_CODE void ETrWriteChar8(CHAR c)
+void ETrWriteChar8(CHAR c)
 {
   if (c == '\n')
     write_trace('\r');
@@ -129,7 +129,7 @@ SEG_INIT_CODE void ETrWriteChar8(CHAR c)
  * Side effects:
  * Characters in string written to UART1.
  */
-SEG_INIT_CODE void ETrWriteString8(PCSTR psz)
+void ETrWriteString8(PCSTR psz)
 {
   while (*psz)
     ETrWriteChar8(*psz++);
@@ -147,7 +147,7 @@ SEG_INIT_CODE void ETrWriteString8(PCSTR psz)
  * Side effects:
  * 8 characters written to UART1.
  */
-SEG_INIT_CODE void ETrWriteWord(UINT32 uiValue)
+void ETrWriteWord(UINT32 uiValue)
 {
   register UINT32 uiShift = 32;
   do
@@ -170,9 +170,9 @@ SEG_INIT_CODE void ETrWriteWord(UINT32 uiValue)
  * Side effects:
  * Many characters written to UART1.
  */
-SEG_INIT_CODE void ETrDumpWords(PUINT32 puiWords, UINT32 cWords)
+void ETrDumpWords(PUINT32 puiWords, UINT32 cWords)
 {
-  static DECLARE_INIT_STRING8_CONST(szSpacer1, ": ");
+  static DECLARE_STRING8_CONST(szSpacer1, ": ");
   register UINT32 i;
   for (i = 0; i < cWords; i++)
   {
@@ -204,9 +204,9 @@ SEG_INIT_CODE void ETrDumpWords(PUINT32 puiWords, UINT32 cWords)
  * Side effects:
  * Characters written to UART1.
  */
-SEG_INIT_CODE void ETrAssertFailed(PCSTR pszFile, INT32 nLine)
+void ETrAssertFailed(PCSTR pszFile, INT32 nLine)
 {
-  static DECLARE_INIT_STRING8_CONST(szPrefix, "** ASSERTION FAILED: ");
+  static DECLARE_STRING8_CONST(szPrefix, "** ASSERTION FAILED: ");
   ETrWriteString8(szPrefix);
   ETrWriteString8(pszFile);
   write_trace(':');
@@ -226,7 +226,7 @@ SEG_INIT_CODE void ETrAssertFailed(PCSTR pszFile, INT32 nLine)
  * Side effects:
  * GPIO 16 configured for output and turns on and off indefinitely.
  */
-SEG_INIT_CODE void ETrInfiniBlink(void)
+void ETrInfiniBlink(void)
 {
   register UINT32 ra;
 

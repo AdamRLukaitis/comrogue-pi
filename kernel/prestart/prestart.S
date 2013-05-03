@@ -41,7 +41,7 @@
  *------------------------------------------------------------------------------------------
  */
 	
-.section ".first.prestart.text"
+.section ".first.text"
 
 .globl	COMROGUEPrestart
 
@@ -209,7 +209,7 @@ COMROGUEPrestart:
  *--------------------------------------------------------------------------------------
  */
 
-.section ".prestart.text"
+.section ".text"
 	
 /*
  * Writes a 32-bit word of data to a memory-mapped IO port.

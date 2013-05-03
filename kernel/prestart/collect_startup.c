@@ -31,12 +31,12 @@
  */
 #define __COMROGUE_PRESTART__
 #include <comrogue/types.h>
-#include <comrogue/internals/seg.h>
 #include <comrogue/internals/mmu.h>
+#include <comrogue/internals/seg.h>
 #include <comrogue/internals/startup.h>
 
 /* The startup information buffer. */
-SEG_INIT_DATA static STARTUP_INFO startup_info = {
+static STARTUP_INFO startup_info = {
   .cb = sizeof(STARTUP_INFO),
   .paTTB = 0,
   .kaTTB = 0,
@@ -64,7 +64,7 @@ SEG_INIT_DATA static STARTUP_INFO startup_info = {
  * NULL if the variable was not found, otherwise a pointer to the first character in the command line
  * following the variable name and associated = sign (first character of the value).
  */
-SEG_INIT_CODE static PCSTR find_variable(PCSTR pszCmdLine, PCSTR pszVariableName)
+static PCSTR find_variable(PCSTR pszCmdLine, PCSTR pszVariableName)
 {
   register PCSTR p = pszCmdLine;
   register PCSTR p1, q;
@@ -92,7 +92,7 @@ SEG_INIT_CODE static PCSTR find_variable(PCSTR pszCmdLine, PCSTR pszVariableName
  * Returns:
  * TRUE if the character is a valid digit, FALSE otherwise.
  */
-SEG_INIT_CODE static BOOL is_valid_digit(CHAR ch, UINT32 base)
+static BOOL is_valid_digit(CHAR ch, UINT32 base)
 {
   register UINT32 nbase;
 
@@ -120,7 +120,7 @@ SEG_INIT_CODE static BOOL is_valid_digit(CHAR ch, UINT32 base)
  * Returns:
  * The converted numeric value.
  */
-SEG_INIT_CODE static UINT32 decode_number(PCSTR pVal, UINT32 base)
+static UINT32 decode_number(PCSTR pVal, UINT32 base)
 {
   register UINT32 accum = 0;
   register UINT32 digit;
@@ -154,16 +154,16 @@ SEG_INIT_CODE static UINT32 decode_number(PCSTR pVal, UINT32 base)
  * Side effects:
  * Modifies the "startup_info" structure.
  */
-SEG_INIT_CODE static void parse_cmdline(PCSTR pszCmdLine)
+static void parse_cmdline(PCSTR pszCmdLine)
 {
-  static DECLARE_INIT_STRING8_CONST(szFBWidth, "bcm2708_fb.fbwidth");
-  static DECLARE_INIT_STRING8_CONST(szFBHeight, "bcm2708_fb.fbheight");
-  static DECLARE_INIT_STRING8_CONST(szRevision, "bcm2708.boardrev");
-  static DECLARE_INIT_STRING8_CONST(szSerial, "bcm2708.serial");
-  static DECLARE_INIT_STRING8_CONST(szMACAddr, "smsc95xx.macaddr");
-  static DECLARE_INIT_STRING8_CONST(szEMMCFreq, "sdhci-bcm2708.emmc_clock_freq");
-  static DECLARE_INIT_STRING8_CONST(szVCMemBase, "vc_mem.mem_base");
-  static DECLARE_INIT_STRING8_CONST(szVCMemSize, "vc_mem.mem_size");
+  static DECLARE_STRING8_CONST(szFBWidth, "bcm2708_fb.fbwidth");
+  static DECLARE_STRING8_CONST(szFBHeight, "bcm2708_fb.fbheight");
+  static DECLARE_STRING8_CONST(szRevision, "bcm2708.boardrev");
+  static DECLARE_STRING8_CONST(szSerial, "bcm2708.serial");
+  static DECLARE_STRING8_CONST(szMACAddr, "smsc95xx.macaddr");
+  static DECLARE_STRING8_CONST(szEMMCFreq, "sdhci-bcm2708.emmc_clock_freq");
+  static DECLARE_STRING8_CONST(szVCMemBase, "vc_mem.mem_base");
+  static DECLARE_STRING8_CONST(szVCMemSize, "vc_mem.mem_size");
   register PCSTR p;
   register int i;
 
@@ -212,7 +212,7 @@ SEG_INIT_CODE static void parse_cmdline(PCSTR pszCmdLine)
  * Side effects:
  * Modifies the "startup_info" structure, which it returns a pointer to.
  */
-SEG_INIT_CODE PSTARTUP_INFO KiCollectStartupInfo(UINT32 always0, UINT32 uiMachineType, PATAG_HEADER pAtags)
+PSTARTUP_INFO KiCollectStartupInfo(UINT32 always0, UINT32 uiMachineType, PATAG_HEADER pAtags)
 {
   /* Fill in the information we can calculate right away. */
   startup_info.uiMachineType = uiMachineType;
