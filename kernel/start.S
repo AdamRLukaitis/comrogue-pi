@@ -33,7 +33,7 @@
 #include <comrogue/internals/sctlr.h>
 #include "sizes.h"
 	
-.section ".initHEAD.text"
+.section ".first.init.text"
 
 .globl	COMROGUEStart
 

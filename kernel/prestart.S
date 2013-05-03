@@ -41,7 +41,7 @@
  *------------------------------------------------------------------------------------------
  */
 	
-.section ".prestartHEAD.text"
+.section ".first.prestart.text"
 
 .globl	COMROGUEPrestart
 

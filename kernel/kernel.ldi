@@ -40,7 +40,7 @@ SECTIONS
   /* space is reclaimed once the kernel begins operation in high memory with MMU on */
   .prestart.text PHYSADDR_LOAD : AT (PHYSADDR_LOAD) {
     paPrestartCode = .;
-    *(.prestartHEAD.text)  /* must be first! */
+    *(.first.prestart.text)  /* must be first! */
     *(.prestart.text)
     *(.prestart.rodata)
     *(.prestart.rodata.*)
@@ -100,7 +100,7 @@ SECTIONS
   /* space is reclaimed once the kernel finishes initialization */
   .init.text : AT(paInitCode) {
     vmaInitCode = .;
-    *(.initHEAD.text)  /* must be first! */
+    *(.first.init.text)  /* must be first! */
     *(.init.text)
     *(.init.rodata)
     *(.init.rodata.*)
