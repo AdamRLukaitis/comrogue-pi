@@ -47,4 +47,6 @@
  */
 #include <comrogue/object_types.h>
 #include <comrogue/objectbase.h>
+#include <comrogue/connpoint.h>
+#include <comrogue/stream.h>
 #include <comrogue/allocator.h>

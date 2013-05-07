@@ -4,7 +4,7 @@
 
 package Parse::Pidl::COMROGUE::Header;
 
-use Parse::Pidl::Typelist qw(mapTypeName maybeMapScalarType is_struct);
+use Parse::Pidl::Typelist qw(mapTypeName maybeMapScalarType is_struct is_enum);
 use Parse::Pidl::Util qw(has_property is_constant);
 
 use vars qw($VERSION);
@@ -140,7 +140,13 @@ sub ParseElement($$)
     my $element = shift;
     my $res = "";
 
-    $res .= $prefix . maybeMapScalarType($element->{TYPE}) . " " . $element->{NAME};
+    $res .= $prefix . maybeMapScalarType($element->{TYPE}) . " ";
+    my $l = $element->{POINTERS};
+    $l-- if (Parse::Pidl::Typelist::scalar_is_reference($element->{TYPE}));
+    foreach my $i (1..$l) {
+	$res .= "*";
+    }
+    $res .= $element->{NAME};
     if (defined($element->{ARRAY_LEN})) {
 	foreach my $l (@{$element->{ARRAY_LEN}}) {
 	    $res .= "[" . $l . "]";
@@ -166,6 +172,15 @@ sub ParseTypedef($)
 		$res .= ParseElement("\t", $elt);
 	    }
 	    $res .= "} ";
+	} elsif (is_enum($def->{DATA})) {
+	    $res .= mapTypeName($def->{DATA}) . " {";
+	    my $first = 1;
+	    foreach my $elt (@{$def->{DATA}->{ELEMENTS}}) {
+		$res .= "," if $first == 0;
+		$first = 0;
+		$res .= "\n\t" . $elt;
+	    }
+	    $res .= "\n} ";
 	} else {
 	    $res .= mapTypeName($def->{DATA}) . " ";
 	}
@@ -208,8 +223,12 @@ sub ParseInterface($)
     $res .= " *---------------------------------------------------------------\n";
     $res .= " */\n\n";
 
+    foreach $d (@{$if->{DATA}}) {
+	$res .= stripquotes($d->{DATA}) . "\n" if ($d->{TYPE} eq "CPP_QUOTE");
+	$res .= ParseTypedef($d) if ($d->{TYPE} eq "TYPEDEF");
+    }
+    
     $res .= MakeGUIDDef("IID", $if->{NAME}, $if->{PROPERTIES}->{uuid});
-
     $res .= MethodsDefinition($if);
 
     if (defined($if->{BASE})) {
@@ -220,11 +239,6 @@ sub ParseInterface($)
     $res .= "\tMETHODS_" . $if->{NAME} . "\n";
     $res .= "END_INTERFACE(" . $if->{NAME} . ")\n\n";
 
-    foreach $d (@{$if->{DATA}}) {
-	$res .= stripquotes($d->{DATA}) . "\n" if ($d->{TYPE} eq "CPP_QUOTE");
-	$res .= ParseTypedef($d) if ($d->{TYPE} eq "TYPEDEF");
-    }
-    
     $res .= "\n#ifdef CINTERFACE\n\n";
     
     foreach $d (@{$if->{DATA}}) {
@@ -276,6 +290,19 @@ sub Parse($$$)
 	"#define $include_sym\n\n" .
 	"#ifndef __ASM__\n\n";
     my $want_macro_headers = 1;
+
+    foreach (@{$idl})
+    {
+	next unless ($_->{TYPE} eq "INTERFACE");
+	next unless (has_property($_, "object"));
+	if ($want_macro_headers) {
+	    $res .= "#include <comrogue/object_definition_macros.h>\n\n";
+	    $want_macro_headers = 0;
+	}
+	$res .= "DECLARE_INTERFACE(" . $_->{NAME} . ")\n";
+    }
+
+    $res .= "\n";
 
     foreach (@{$idl})
     {

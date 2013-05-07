@@ -1,0 +1,74 @@
+import "comrogue/object_types.idl";
+import "comrogue/objectbase.idl";
+
+/*-----------------------------
+ * ISequentialStream interface
+ *-----------------------------
+ */
+
+[object, uuid(0c733a30-2a1c-11ce-ade5-00aa0044773d), pointer_default(unique)]
+interface ISequentialStream: IUnknown
+{
+  typedef ISequentialStream *PSEQUENTIALSTREAM;
+
+  HRESULT Read([out, size_is(cb), length_is(*pcbRead)] PVOID pv, [in] UINT32 cb, [out] UINT32 *pcbRead);
+  HRESULT Write([in, length_is(cb)] PCVOID pv, [in] UINT32 cb, [out] UINT32 *pcbWritten);
+}
+
+/*-------------------
+ * IStream interface
+ *-------------------
+ */
+
+[object, uuid(0000000c-0000-0000-C000-000000000046), pointer_default(unique)]
+interface IStream: ISequentialStream
+{
+  typedef IStream *PSTREAM;
+
+  typedef struct tagSTATSTG
+  {
+    PWSTR pwcsName;
+    UINT32 type;
+    UINT64 cbSize;
+    FILETIME mtime;
+    FILETIME ctime;
+    FILETIME atime;
+    UINT32 grfMode;
+    UINT32 grfLocksSupported;
+    CLSID clsid;
+    UINT32 grfStateBits;
+    UINT32 reserved;
+  } STATSTG;
+
+  typedef enum tagSTGTY
+  {
+    STGTY_STORAGE = 1,
+    STGTY_STREAM = 2,
+    STGTY_LOCKBYTES = 3,
+    STGTY_PROPERTY = 4
+  } STGTY;
+
+  typedef enum tagSTREAM_SEEK
+  {
+    STREAM_SEEK_SET = 0,
+    STREAM_SEEK_CUR = 1,
+    STREAM_SEEK_END = 2
+  } STREAM_SEEK;
+
+  typedef enum tagLOCKTYPE
+  {
+    LOCK_WRITE = 1,
+    LOCK_EXCLUSIVE = 2,
+    LOCK_ONLYONCE = 4
+  } LOCKTYPE;
+
+  HRESULT Seek([in] INT64 dlibMove, [in] UINT32 uiOrigin, [out] UINT64 *plibNewPosition);
+  HRESULT SetSize([in] UINT64 libNewSize);
+  HRESULT CopyTo([in, unique] IStream *pstm, [in] UINT64 cb, [out] UINT64 *pcbRead, [out] UINT64 *pcbWritten);
+  HRESULT Commit([in] UINT32 grfCommitFlags);
+  HRESULT Revert(void);
+  HRESULT LockRegion([in] UINT64 libOffset, [in] UINT64 cb, [in] UINT32 uiLockType);
+  HRESULT UnlockRegion([in] UINT64 libOffset, [in] UINT64 cb, [in] UINT32 uiLockType);
+  HRESULT Stat([out] STATSTG *pstatstg, [in] UINT32 grfStatFlag);
+  HRESULT Clone([out] IStream **ppstm);
+}

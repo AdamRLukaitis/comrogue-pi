@@ -8,8 +8,8 @@ package Parse::Pidl::Typelist;
 require Exporter;
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(hasType getType resolveType mapTypeName scalar_is_reference expandAlias
-	mapScalarType maybeMapScalarType addType typeIs is_signed is_scalar is_struct enum_type_fn
-	bitmap_type_fn mapType typeHasBody is_fixed_size_scalar
+	mapScalarType maybeMapScalarType addType typeIs is_signed is_scalar is_struct is_enum
+        enum_type_fn bitmap_type_fn mapType typeHasBody is_fixed_size_scalar
 );
 use vars qw($VERSION);
 $VERSION = '0.01';
@@ -34,6 +34,7 @@ my @non_fixed_size_scalars = (
 my %scalars = (
 	"void"		=> "void",
 	"char"		=> "char",
+        "wchar_t"       => "wchar_t",
 	"int8"		=> "int8_t",
 	"uint8"		=> "uint8_t",
 	"int16"		=> "int16_t",
@@ -211,6 +212,17 @@ sub is_struct($)
     if (my $dt = getType($type)) {
 	return is_struct($dt->{DATA}) if ($dt->{TYPE} eq "TYPEDEF");
 	return 1 if ($dt->{TYPE} eq "STRUCT");
+    }
+    return 0;
+}
+
+sub is_enum($)
+{
+    my $type = shift;
+    return 1 if (ref($type) eq "HASH" and  $type->{TYPE} eq "ENUM");
+    if (my $dt = getType($type)) {
+	return is_enum($dt->{DATA}) if ($dt->{TYPE} eq "TYPEDEF");
+	return 1 if ($dt->{TYPE} eq "ENUM");
     }
     return 0;
 }

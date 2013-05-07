@@ -17,3 +17,26 @@ interface IMalloc : IUnknown
   void HeapMinimize(void);
 }
 
+/*----------------------
+ * IMallocSpy interface
+ *----------------------
+ */
+
+[object, uuid(0000001d-0000-0000-C000-000000000046)]
+interface IMallocSpy: IUnknown
+{
+  [unique] typedef IMallocSpy *PMALLOCSPY;
+
+  SIZE_T PreAlloc([in] SIZE_T cbRequest);
+  PVOID PostAlloc([in] PVOID pActual);
+  PVOID PreFree([in] PVOID pRequest, [in] BOOL fSpyed);
+  void PostFree([in] BOOL fSpyed);
+  SIZE_T PreRealloc([in] PVOID pRequest, [in] SIZE_T cbRequest, [out] PVOID *ppNewRequest, [in] BOOL fSpyed);
+  PVOID PostRealloc([in] PVOID pActual, [in] BOOL fSpyed);
+  PVOID PreGetSize([in] PVOID pRequest, [in] BOOL fSpyed);
+  SIZE_T PostGetSize([in] SIZE_T cbActual, [in] BOOL fSpyed);
+  PVOID PreDidAlloc([in] PVOID pRequest, [in] BOOL fSpyed);
+  INT32 PostDidAlloc([in] PVOID pRequest, [in] BOOL fSpyed, [in] INT32 fActual);
+  void PreHeapMinimize(void);
+  void PostHeapMinimize(void);
+}

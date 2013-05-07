@@ -69,12 +69,16 @@ interface ICOMROGUETypes
   typedef char CHAR;
   typedef uint8 UCHAR;
   typedef uint8 BYTE;
+  typedef wchar_t WCHAR;
 
   typedef CHAR *PCHAR;
   typedef const CHAR *PCCHAR;
   typedef UCHAR *PUCHAR;
+  typedef WCHAR *PWCHAR;
   [string] typedef CHAR *PSTR;
   [string] typedef const CHAR *PCSTR;
+  [string] typedef WCHAR *PWSTR;
+  [string] typedef const WCHAR *PCWSTR;
 
   /* Boolean type */
   typedef int BOOL;
@@ -82,6 +86,14 @@ interface ICOMROGUETypes
   /* Status code/result types */
   typedef UINT32 SCODE;
   typedef SCODE HRESULT;
+
+  /* FILETIME typedef */
+  typedef struct tagFILETIME
+  {
+    UINT32 uiLowDateTime;
+    UINT32 uiHighDateTime;
+  } FILETIME;
+  typedef FILETIME *PFILETIME;
 
   /* GUID typedefs */
   typedef struct tagGUID {

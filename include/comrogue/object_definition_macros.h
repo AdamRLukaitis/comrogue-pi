@@ -91,9 +91,10 @@
 #define END_METHODS
 #define INHERIT_METHODS(sym)    sym
 
-#define BEGIN_INTERFACE(typ) \
+#define DECLARE_INTERFACE(typ) \
   struct typ ## VTable; \
-  typedef interface tagIf ## typ { const struct typ ## VTable *pVTable; } typ; \
+  typedef interface tagIf ## typ { const struct typ ## VTable *pVTable; } typ;
+#define BEGIN_INTERFACE(typ) \
   struct typ ## VTable {
 #define BEGIN_INTERFACE_(typ, parent)   BEGIN_INTERFACE(typ)
 #define END_INTERFACE(typ)     };
@@ -108,6 +109,8 @@
 #define END_METHODS
 #define INHERIT_METHODS(sym)
 
+#define DECLARE_INTERFACE(typ) \
+  interface typ;
 #define BEGIN_INTERFACE(typ) \
   interface typ {
 #define BEGIN_INTERFACE_(typ, parent) \
