@@ -1,0 +1,63 @@
+The COMROGUE Operating System for Raspberry Pi
+
+Copyright (c) 2013, Eric J. Bowersox / Erbosoft Enterprises
+All rights reserved.
+See the file "COPYRIGHT" for full copyright information.
+-------------------------------------------------------------------------------
+BACKGROUND
+
+The COMROGUE operating system stems from some ideas I had back when I was primarily a Windows developer working
+with COM (in the late 1990's or so).  The COM concept of interfaces seemed so elegant, I wondered if it would be
+possible to do an entire operating system with a COM paradigm, that is, where every "system call" was actually a
+call to a COM interface.  Some interfaces might be ones defined by the existing COM implementation (for instance,
+"file handles" would be IStream pointers, and memory might be allocated from the heap via an IMalloc interface),
+others would be entirely novel.  For one reason and another, I never did much with this, though I toyed with the
+idea at one point using VirtualBox on an x86 system.  The Raspberry Pi, however, offers a unique possibility, in
+that its generic hardware is much more limited in scope than a PC's, so something ike this might just be possible
+without too much fiddling with differences in hardware.
+
+Needless to say, this will be considered a "work in progress" for quite some time to come. :-)
+
+BUILDING
+
+You will need a cross-compiler setup on Linux; I use gcc-4.7.1 and binutils-2.22, installed in the tree
+/opt/gnuarm and with the prefix "arm-none-eabi".  Other versions MAY work.  The compiler tools are located
+with the variables ARMDIR and ARMPREFIX in the armcompile.mk file.
+
+To build the "pidl" MIDL compiler (in tools/pidl), you will need Perl and Yapp installed.
+
+You will also need GNU Make to execute everything (of course).
+
+The command "make" in the root directory of the source will build everything.  The COMROGUE kernel will be in
+kernel/kernel.img when the build is finished.
+
+EXECUTING
+
+Use a blank, FAT-formatted SD card (almost any size will do; I use 2 Gb cards as they're fairly common and cheap
+these days).  Download the current Raspberry Pi firmware files from https://github.com/raspberrypi/firmware; the
+files you need will be bootcode.bin, fixup.dat, and start.elf in the boot/ subdirectory.  Copy those three files
+to your SD card, along with the kernel.img file from COMROGUE's kernel/ directory.  Insert the card into your
+Raspberry Pi and power up.
+
+Right now, the only output you'll see comes via the "mini-UART" serial output, which COMROGUE uses for trace output.
+To see it, you'll need a couple of parts sold by Spark Fun Electronics of Boulder, CO:
+
+*  FTDI Basic Breakout (3.3V), https://www.sparkfun.com/products/9873
+*  Jumper Wires Premium 6" M/F (10-pack), https://www.sparkfun.com/products/9140
+
+You'll also need a USB A-to-mini-B cable to hook the serial converter board to your PC's USB port.
+
+Connect jumper wires between the pins of the FTDI board and the GPIO connector on the Raspberry Pi as follows:
+
+*  GPIO pin 6 -> GND (ground) on FTDI.  (Suggested jumper wire color: black.)
+*  GPIO pin 8 -> RXI (receive input) on FTDI. (Suggested jumper wire color: red, for data *R*eceived from the Pi.)
+*  GPIO pin 10 -> TXO (transmit output) on FTDI. (Suggested jumper wire color: green, for data *G*oing to the Pi.)
+
+Connect the FTDI to your computer with the USB A-to-mini-B cable.  On your PC, open Minicom and connect to port
+/dev/ttyUSB0.  Set the program to 115200 baud, 8 data bits, no parity, 1 stop bit, NO flow control (either hardware
+or software).  You should see some messages from COMROGUE when you apply power to the Pi.
+
+FURTHER INFORMATION
+
+The documentation/ directory will eventually contain more documentation on how the system works/will work.  In
+the meantime, I have tried to comment the code well enough to show what's going on.
