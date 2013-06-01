@@ -93,6 +93,9 @@
 #define STG_S_CONSOLIDATIONFAILED    SCODE_CAST(0x00030205)    /* consolidation failed but commit OK */
 #define STG_S_CANNOTCONSOLIDATE      SCODE_CAST(0x00030206)    /* cannot consolidate but commit OK */
 
+/* Memory manager success codes */
+#define MEMMGR_S_NONZEROED           SCODE_CAST(0x06010001)    /* returned memory is non-zeroed */
+
 /* Basic error codes */
 #define E_NOTIMPL                    SCODE_CAST(0x80000001)    /* not implemented */
 #define E_OUTOFMEMORY                SCODE_CAST(0x80000002)    /* out of memory */
@@ -164,5 +167,6 @@
 #define MEMMGR_E_NOKERNSPC           SCODE_CAST(0x86010006)    /* no kernel space */
 #define MEMMGR_E_RECURSED            SCODE_CAST(0x86010007)    /* tried to recurse into page allocation */
 #define MEMMGR_E_BADTAGS             SCODE_CAST(0x86010008)    /* invalid tags for freed page */
+#define MEMMGR_E_BADHEAPDATASIZE     SCODE_CAST(0x86010009)    /* bad size of raw heap data block */
 
 #endif /* __SCODE_H_INCLUDED */

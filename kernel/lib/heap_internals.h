@@ -29,60 +29,28 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-import "comrogue/objectbase.idl";
+/*
+ * This code is based on/inspired by jemalloc-3.3.1.  Please see LICENSE.jemalloc for further details.
+ */
+#ifndef __HEAP_INTERNALS_H_INCLUDED
+#define __HEAP_INTERNALS_H_INCLUDED
 
-/*-------------------
- * IMalloc interface
- *-------------------
+#include <comrogue/objectbase.h>
+#include <comrogue/connpoint.h>
+#include <comrogue/allocator.h>
+#include <comrogue/heap.h>
+
+/*----------------------------------
+ * The actual heap data declaration
+ *----------------------------------
  */
 
-[object, uuid(00000002-0000-0000-C000-000000000046)]
-interface IMalloc : IUnknown
-{
-  [unique] typedef IMalloc *PMALLOC;
-  PVOID Alloc([in] SIZE_T cb);
-  PVOID Realloc([in] PVOID pv, [in] SIZE_T cb);
-  void Free([in] PVOID pv);
-  SIZE_T GetSize([in] PVOID pv);
-  INT32 DidAlloc([in] PVOID pv);
-  void HeapMinimize(void);
-}
+typedef struct tagHEAPDATA {
+  IMalloc mallocInterface;                         /* pointer to IMalloc interface - MUST BE FIRST! */
+  IConnectionPointContainer cpContainerInterface;  /* pointer to IConnectionPointContainer interface */
+  UINT32 uiRefCount;                               /* reference count */
+  PFNRAWHEAPDATAFREE pfnFreeRawHeapData;           /* pointer to function that frees the raw heap data, if any */
+  IChunkAllocator *pChunkAllocator;                /* chunk allocator pointer */
+} HEAPDATA, *PHEAPDATA;
 
-/*----------------------
- * IMallocSpy interface
- *----------------------
- */
-
-[object, uuid(0000001d-0000-0000-C000-000000000046)]
-interface IMallocSpy: IUnknown
-{
-  [unique] typedef IMallocSpy *PMALLOCSPY;
-
-  SIZE_T PreAlloc([in] SIZE_T cbRequest);
-  PVOID PostAlloc([in] PVOID pActual);
-  PVOID PreFree([in] PVOID pRequest, [in] BOOL fSpyed);
-  void PostFree([in] BOOL fSpyed);
-  SIZE_T PreRealloc([in] PVOID pRequest, [in] SIZE_T cbRequest, [out] PVOID *ppNewRequest, [in] BOOL fSpyed);
-  PVOID PostRealloc([in] PVOID pActual, [in] BOOL fSpyed);
-  PVOID PreGetSize([in] PVOID pRequest, [in] BOOL fSpyed);
-  SIZE_T PostGetSize([in] SIZE_T cbActual, [in] BOOL fSpyed);
-  PVOID PreDidAlloc([in] PVOID pRequest, [in] BOOL fSpyed);
-  INT32 PostDidAlloc([in] PVOID pRequest, [in] BOOL fSpyed, [in] INT32 fActual);
-  void PreHeapMinimize(void);
-  void PostHeapMinimize(void);
-}
-
-/*---------------------------
- * IChunkAllocator interface
- *---------------------------
- */
-
-[object, uuid(76f6c6cf-2f4e-4d42-b620-99aa6872d477)]
-interface IChunkAllocator: IUnknown
-{
-  [unique] typedef IChunkAllocator *PCHUNKALLOCATOR;
-
-  HRESULT AllocChunk([in] UINT32 cbChunk, [in] UINT32 uiAlignment, [out] PVOID *ppvChunk);
-  HRESULT FreeChunk([in] PVOID pvChunk, [in] UINT32 cbChunk);
-  HRESULT PurgeUnusedRegion([in] PVOID pvRegion, [in] UINT32 cbRegion);
-}
+#endif /* __HEAP_INTERNALS_H_INCLUDED */

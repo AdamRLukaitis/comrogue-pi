@@ -29,60 +29,40 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-import "comrogue/objectbase.idl";
+#ifndef __HEAP_H_INCLUDED
+#define __HEAP_H_INCLUDED
 
-/*-------------------
- * IMalloc interface
- *-------------------
+#ifndef __ASM__
+
+#include <comrogue/compiler_macros.h>
+#include <comrogue/types.h>
+#include <comrogue/scode.h>
+#include <comrogue/allocator.h>
+
+/*------------------------------------------------------------------------------------
+ * The raw heap data used to hold the heap internals.  It's defined as opaque memory.
+ *------------------------------------------------------------------------------------
  */
 
-[object, uuid(00000002-0000-0000-C000-000000000046)]
-interface IMalloc : IUnknown
+typedef struct tagRAWHEAPDATA
 {
-  [unique] typedef IMalloc *PMALLOC;
-  PVOID Alloc([in] SIZE_T cb);
-  PVOID Realloc([in] PVOID pv, [in] SIZE_T cb);
-  void Free([in] PVOID pv);
-  SIZE_T GetSize([in] PVOID pv);
-  INT32 DidAlloc([in] PVOID pv);
-  void HeapMinimize(void);
-}
+  UINT32 opaque[8];
+} RAWHEAPDATA, *PRAWHEAPDATA;
 
-/*----------------------
- * IMallocSpy interface
- *----------------------
+typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA prhd);
+
+/*--------------------
+ * External functions
+ *--------------------
  */
 
-[object, uuid(0000001d-0000-0000-C000-000000000046)]
-interface IMallocSpy: IUnknown
-{
-  [unique] typedef IMallocSpy *PMALLOCSPY;
+CDECL_BEGIN
 
-  SIZE_T PreAlloc([in] SIZE_T cbRequest);
-  PVOID PostAlloc([in] PVOID pActual);
-  PVOID PreFree([in] PVOID pRequest, [in] BOOL fSpyed);
-  void PostFree([in] BOOL fSpyed);
-  SIZE_T PreRealloc([in] PVOID pRequest, [in] SIZE_T cbRequest, [out] PVOID *ppNewRequest, [in] BOOL fSpyed);
-  PVOID PostRealloc([in] PVOID pActual, [in] BOOL fSpyed);
-  PVOID PreGetSize([in] PVOID pRequest, [in] BOOL fSpyed);
-  SIZE_T PostGetSize([in] SIZE_T cbActual, [in] BOOL fSpyed);
-  PVOID PreDidAlloc([in] PVOID pRequest, [in] BOOL fSpyed);
-  INT32 PostDidAlloc([in] PVOID pRequest, [in] BOOL fSpyed, [in] INT32 fActual);
-  void PreHeapMinimize(void);
-  void PostHeapMinimize(void);
-}
+extern HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocator *pChunkAllocator,
+			  IMalloc **ppHeap);
 
-/*---------------------------
- * IChunkAllocator interface
- *---------------------------
- */
+CDECL_END
 
-[object, uuid(76f6c6cf-2f4e-4d42-b620-99aa6872d477)]
-interface IChunkAllocator: IUnknown
-{
-  [unique] typedef IChunkAllocator *PCHUNKALLOCATOR;
+#endif /* __ASM__ */
 
-  HRESULT AllocChunk([in] UINT32 cbChunk, [in] UINT32 uiAlignment, [out] PVOID *ppvChunk);
-  HRESULT FreeChunk([in] PVOID pvChunk, [in] UINT32 cbChunk);
-  HRESULT PurgeUnusedRegion([in] PVOID pvRegion, [in] UINT32 cbRegion);
-}
+#endif /* __HEAP_H_INCLUDED */

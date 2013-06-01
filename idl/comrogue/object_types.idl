@@ -74,6 +74,7 @@ interface ICOMROGUETypes
   typedef CHAR *PCHAR;
   typedef const CHAR *PCCHAR;
   typedef UCHAR *PUCHAR;
+  typedef BYTE *PBYTE;
   typedef WCHAR *PWCHAR;
   [string] typedef CHAR *PSTR;
   [string] typedef const CHAR *PCSTR;
