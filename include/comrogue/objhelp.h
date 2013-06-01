@@ -37,17 +37,20 @@
 #include <comrogue/compiler_macros.h>
 #include <comrogue/objectbase.h>
 #include <comrogue/allocator.h>
+#include <comrogue/stream.h>
 
 CDECL_BEGIN
 
 /* QueryInterface helpers */
 extern HRESULT ObjHlpStandardQueryInterface_IMalloc(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
+extern HRESULT ObjHlpStandardQueryInterface_ISequentialStream(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 
 /* AddRef/Release helpers */
 extern UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis);
 
 /* Other helpers */
 extern void ObjHlpDoNothingReturnVoid(IUnknown *pThis);
+extern HRESULT ObjHlpNotImplemented(IUnknown *pThis);
 
 CDECL_END
 

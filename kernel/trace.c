@@ -32,6 +32,8 @@
 #include <stdarg.h>
 #include <comrogue/types.h>
 #include <comrogue/str.h>
+#include <comrogue/stream.h>
+#include <comrogue/objhelp.h>
 #include <comrogue/internals/seg.h>
 #include <comrogue/internals/llio.h>
 #include <comrogue/internals/auxdev.h>
@@ -256,6 +258,65 @@ void TrAssertFailed(PCSTR pszFile, INT32 nLine)
 {
   static DECLARE_STRING8_CONST(szMessage, "*** ASSERTION FAILED at %s:%d\n");
   TrPrintf8(szMessage, pszFile, nLine);
+}
+
+/*
+ * Writes a buffer full of data (assumed 8-bit) to the trace output.
+ *
+ * Parameters:
+ * - pThis = ISequentialStream output pointer (ignored).
+ * - pv = Pointer to buffer to be written.
+ * - cb = Number of bytes to be written.
+ * - pcbWritten = If non-NULL, points to variable that will receive the number of bytes actually written.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator.
+ */
+static HRESULT traceStreamWrite(ISequentialStream *pThis, PCVOID pv, UINT32 cb, UINT32 *pcbWritten)
+{
+  register PCHAR p1, p2;   /* buffer pointers */
+
+  if (!pv)
+    return STG_E_INVALIDPOINTER;
+  p1 = (PCHAR)pv;
+  p2 = p1 + cb;
+  while (p1 < p2)
+    TrWriteChar8(*p1++);
+  if (pcbWritten)
+    *pcbWritten = cb;
+  return S_OK;
+}
+
+/* VTable for an implementation of ISequentialStream that outputs to the trace output. */
+static const SEG_RODATA struct ISequentialStreamVTable vtblTraceStream =
+{
+  .QueryInterface = ObjHlpStandardQueryInterface_ISequentialStream,
+  .AddRef = ObjHlpStaticAddRefRelease,
+  .Release = ObjHlpStaticAddRefRelease,
+  .Read = (HRESULT (*)(ISequentialStream*, PVOID, UINT32, UINT32*))ObjHlpNotImplemented,
+  .Write = traceStreamWrite
+};
+
+/* Implementation of ISequentialStream that outputs to the trace output. */
+static const SEG_RODATA ISequentialStream traceStream = { &vtblTraceStream };
+
+/*
+ * Stores a pointer to the ISequentialStream implementation that outputs to the trace output.  When
+ * done with the pointer, be sure to call Release() on it.
+ *
+ * Parameters:
+ * - ppstm = Pointer to the variable to receive the ISequentialStream pointer.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator.
+ */
+HRESULT TrGetSequentialStream(ISequentialStream **ppstm)
+{
+  if (!ppstm)
+    return E_POINTER;
+  *ppstm = (ISequentialStream *)(&traceStream);
+  IUnknown_AddRef(*ppstm);
+  return S_OK;
 }
 
 /*

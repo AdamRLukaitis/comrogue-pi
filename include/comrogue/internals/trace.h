@@ -39,6 +39,7 @@
 #include <stdarg.h>
 #include <comrogue/types.h>
 #include <comrogue/scode.h>
+#include <comrogue/stream.h>
 #include <comrogue/compiler_macros.h>
 #include <comrogue/internals/seg.h>
 
@@ -69,6 +70,7 @@ extern void TrWriteString8(PCSTR str);
 extern void TrWriteWord(UINT32 uiValue);
 extern HRESULT TrVPrintf8(PCSTR pszFormat, va_list pargs);
 extern HRESULT TrPrintf8(PCSTR pszFormat, ...);
+extern HRESULT TrGetSequentialStream(ISequentialStream **ppstm);
 extern void TrAssertFailed(PCSTR pszFile, INT32 nLine);
 extern void TrInfiniBlink(void);
 

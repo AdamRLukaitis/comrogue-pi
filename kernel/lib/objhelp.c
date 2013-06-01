@@ -36,6 +36,7 @@
 #include <comrogue/objectbase.h>
 #include <comrogue/allocator.h>
 #include <comrogue/stdobj.h>
+#include <comrogue/stream.h>
 #include <comrogue/objhelp.h>
 
 /*--------------------------------------------
@@ -93,6 +94,7 @@ HRESULT ObjHlpStandardQueryInterface_ ## iface (IUnknown *pThis, REFIID riid, PP
 } 
 
 MAKE_BASE_QI(IMalloc)
+MAKE_BASE_QI(ISequentialStream)
 
 /*
  * "Dummy" version of AddRef/Release used for static objects.
@@ -120,4 +122,18 @@ UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis)
 void ObjHlpDoNothingReturnVoid(IUnknown *pThis)
 {
   /* do nothing */
+}
+
+/*
+ * Method that does nothing and returns E_NOTIMPL.
+ *
+ * Parameters:
+ * - pThis = Base interface pointer.
+ *
+ * Returns:
+ * E_NOTIMPL.
+ */
+HRESULT ObjHlpNotImplemented(IUnknown *pThis)
+{
+  return E_NOTIMPL;
 }
