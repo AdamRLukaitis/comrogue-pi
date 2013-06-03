@@ -34,6 +34,8 @@
  */
 #include <comrogue/types.h>
 #include <comrogue/str.h>
+#include <comrogue/objhelp.h>
+#include <comrogue/stdobj.h>
 #include <comrogue/allocator.h>
 #include <comrogue/heap.h>
 #include <comrogue/internals/seg.h>
@@ -44,12 +46,59 @@
  *------------------------
  */
 
-static UINT32 IMalloc_AddRef(IUnknown *pThis)
+/*
+ * Queries for an interface on the heap object.
+ *
+ * Parameters:
+ * - pThis = Pointer to the heap data object (actually its IMalloc interface pointer).
+ * - riid = Reference to the IID of the interface we want to load.
+ * - ppvObject = Pointer to the location to receive the new interface pointer.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator:
+ * - S_OK = New interface pointer was returned.
+ * - E_NOINTERFACE = The object does not support this interface.
+ * - E_POINTER = The ppvObject pointer is not valid.
+ */
+static HRESULT malloc_QueryInterface(IUnknown *pThis, REFIID riid, PPVOID ppvObject)
+{
+  if (!ppvObject)
+    return E_POINTER;
+  *ppvObject = NULL;
+  if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IMalloc))
+    *ppvObject = pThis;
+  else if (IsEqualIID(riid, &IID_IConnectionPointContainer))
+    *ppvObject = &(((PHEAPDATA)pThis)->cpContainerInterface);
+  else
+    return E_NOINTERFACE;
+  IUnknown_AddRef((IUnknown *)(*ppvObject));
+  return S_OK;
+}
+
+/*
+ * Adds a reference to the heap data object.
+ *
+ * Parameters:
+ * - pThis = Pointer to the heap data object (actually its IMalloc interface pointer).
+ *
+ * Returns:
+ * The new reference count on the object.
+ */
+static UINT32 malloc_AddRef(IUnknown *pThis)
 {
   return ++(((PHEAPDATA)pThis)->uiRefCount);
 }
 
-static UINT32 IMalloc_Release(IUnknown *pThis)
+/*
+ * Removes a reference from the heap data object.  The object is freed when its reference count reaches 0.
+ *
+ * Parameters:
+ * - pThis = Pointer to the heap data object (actually its IMalloc interface pointer).
+ *
+ * Returns:
+ * The new reference count on the object.
+ */
+static UINT32 malloc_Release(IUnknown *pThis)
 {
   PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
   UINT32 rc;                         /* return from this function */
@@ -68,11 +117,48 @@ static UINT32 IMalloc_Release(IUnknown *pThis)
   return rc;
 }
 
+static PVOID malloc_Alloc(IMalloc *pThis, SIZE_T cb)
+{
+  return NULL; /* TODO */
+}
+
+static PVOID malloc_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb)
+{
+  return NULL; /* TODO */
+}
+
+static void malloc_Free(IMalloc *pThis, PVOID pv)
+{
+  /* TODO */
+}
+
+static SIZE_T malloc_GetSize(IMalloc *pThis, PVOID pv)
+{
+  return -1; /* TODO */
+}
+
+static INT32 malloc_DidAlloc(IMalloc *pThis, PVOID pv)
+{
+  return -1; /* TODO */
+}
+
+static void malloc_HeapMinimize(IMalloc *pThis)
+{
+  /* TODO */
+}
+
 /* The IMalloc vtable. */
 static const SEG_RODATA struct IMallocVTable vtblMalloc =
 {
-  .AddRef = IMalloc_AddRef,
-  .Release = IMalloc_Release
+  .QueryInterface = malloc_QueryInterface,
+  .AddRef = malloc_AddRef,
+  .Release = malloc_Release,
+  .Alloc = malloc_Alloc,
+  .Realloc = malloc_Realloc,
+  .Free = malloc_Free,
+  .GetSize = malloc_GetSize,
+  .DidAlloc = malloc_DidAlloc,
+  .HeapMinimize = malloc_HeapMinimize
 };
 
 /*------------------------------------------
@@ -83,21 +169,71 @@ static const SEG_RODATA struct IMallocVTable vtblMalloc =
 /* Quick macro to get the PHEAPDATA from the IConnectionPointContainer pointer */
 #define HeapDataPtr(pcpc)    (((PBYTE)(pcpc)) - OFFSETOF(HEAPDATA, cpContainerInterface))
 
-static UINT32 IConnectionPointContainer_AddRef(IUnknown *pThis)
+/*
+ * Queries for an interface on the heap object.
+ *
+ * Parameters:
+ * - pThis = Pointer to the ConnectionPointContainer interface in the heap data object.
+ * - riid = Reference to the IID of the interface we want to load.
+ * - ppvObject = Pointer to the location to receive the new interface pointer.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator:
+ * - S_OK = New interface pointer was returned.
+ * - E_NOINTERFACE = The object does not support this interface.
+ * - E_POINTER = The ppvObject pointer is not valid.
+ */
+static HRESULT cpc_QueryInterface(IUnknown *pThis, REFIID riid, PPVOID ppvObject)
 {
-  return IMalloc_AddRef((IUnknown *)HeapDataPtr(pThis));
+  return malloc_QueryInterface((IUnknown *)HeapDataPtr(pThis), riid, ppvObject);
 }
 
-static UINT32 IConnectionPointContainer_Release(IUnknown *pThis)
+/*
+ * Adds a reference to the heap data object.
+ *
+ * Parameters:
+ * - pThis = Pointer to the ConnectionPointContainer interface in the heap data object.
+ *
+ * Returns:
+ * The new reference count on the object.
+ */
+static UINT32 cpc_AddRef(IUnknown *pThis)
 {
-  return IMalloc_Release((IUnknown *)HeapDataPtr(pThis));
+  return malloc_AddRef((IUnknown *)HeapDataPtr(pThis));
+}
+
+/*
+ * Removes a reference from the heap data object.  The object is freed when its reference count reaches 0.
+ *
+ * Parameters:
+ * - pThis = Pointer to the ConnectionPointContainer interface in the heap data object.
+ *
+ * Returns:
+ * The new reference count on the object.
+ */
+static UINT32 cpc_Release(IUnknown *pThis)
+{
+  return malloc_Release((IUnknown *)HeapDataPtr(pThis));
+}
+
+static HRESULT cpc_EnumConnectionPoints(IConnectionPointContainer *pThis, IEnumConnectionPoints **ppEnum)
+{
+  return E_NOTIMPL; /* TODO */
+}
+
+static HRESULT cpc_FindConnectionPoint(IConnectionPointContainer *pThis, REFIID riid, IConnectionPoint **ppCP)
+{
+  return E_NOTIMPL; /* TODO */
 }
 
 /* The IConnectionPointContainer vtable. */
 static const SEG_RODATA struct IConnectionPointContainerVTable vtblConnectionPointContainer =
 {
-  .AddRef = IConnectionPointContainer_AddRef,
-  .Release = IConnectionPointContainer_Release
+  .QueryInterface = cpc_QueryInterface,
+  .AddRef = cpc_AddRef,
+  .Release = cpc_Release,
+  .EnumConnectionPoints = cpc_EnumConnectionPoints,
+  .FindConnectionPoint = cpc_FindConnectionPoint
 };
 
 /*------------------------

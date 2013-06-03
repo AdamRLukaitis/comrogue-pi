@@ -32,7 +32,7 @@ MAKEFLAGS += -rR
 CRBASEDIR := $(abspath ../..)
 include $(CRBASEDIR)/armcompile.mk
 
-LIB_OBJS = divide.o qdivrem.o heap_toplevel.o intlib.o objhelp.o rbtree.o str.o \
+LIB_OBJS = divide.o qdivrem.o heap_toplevel.o intlib.o objhelp.o objhelp_fixedcp.o rbtree.o str.o \
 	   strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
 
 all:	kernel-lib.o

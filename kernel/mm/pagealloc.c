@@ -84,7 +84,7 @@ static void zero_page(UINT32 ndxPage)
   ASSERT(SUCCEEDED(hr));
   if (SUCCEEDED(hr))
   {
-    StrSetMem(g_kaZero, 0, SYS_PAGE_SIZE);
+    StrSetMem((PVOID)g_kaZero, 0, SYS_PAGE_SIZE);
     VERIFY(SUCCEEDED(MmDemapPages(NULL, g_kaZero, 1)));
   }
 }

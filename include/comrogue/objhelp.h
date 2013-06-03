@@ -36,17 +36,44 @@
 
 #include <comrogue/compiler_macros.h>
 #include <comrogue/objectbase.h>
+#include <comrogue/connpoint.h>
 #include <comrogue/allocator.h>
 #include <comrogue/stream.h>
+
+/*------------------------------------------------
+ * Generic fixed connection point data structure.
+ *------------------------------------------------
+ */
+
+typedef struct tagFIXEDCPDATA
+{
+  IConnectionPoint connectionPointInterface;  /* the connection point interface */
+  PUNKNOWN punkOuter;                         /* outer unknown used for reference counts */
+  REFIID riidConnection;                      /* IID of outgoing interface for this connection point */
+  IUnknown **ppSlots;                         /* pointer to actual slots used for connection point storage */
+  INT32 ncpSize;                              /* number of connection points actually connected */
+  INT32 ncpCapacity;                          /* maximum number of connection points connectable */
+} FIXEDCPDATA, *PFIXEDCPDATA;
+
+/*---------------------
+ * Function prototypes
+ *---------------------
+ */
 
 CDECL_BEGIN
 
 /* QueryInterface helpers */
+extern HRESULT ObjHlpStandardQueryInterface_IConnectionPoint(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 extern HRESULT ObjHlpStandardQueryInterface_IMalloc(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 extern HRESULT ObjHlpStandardQueryInterface_ISequentialStream(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 
 /* AddRef/Release helpers */
 extern UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis);
+
+/* Connection point helpers */
+extern void ObjHlpFixedCpSetup(PFIXEDCPDATA pData, PUNKNOWN punkOuter, REFIID riidConnection,
+			       IUnknown **ppSlots, INT32 nSlots);
+extern void ObjHlpFixedCpTeardown(PFIXEDCPDATA pData);
 
 /* Other helpers */
 extern void ObjHlpDoNothingReturnVoid(IUnknown *pThis);
