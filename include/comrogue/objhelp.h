@@ -51,8 +51,9 @@ typedef struct tagFIXEDCPDATA
   PUNKNOWN punkOuter;                         /* outer unknown used for reference counts */
   REFIID riidConnection;                      /* IID of outgoing interface for this connection point */
   IUnknown **ppSlots;                         /* pointer to actual slots used for connection point storage */
-  INT32 ncpSize;                              /* number of connection points actually connected */
-  INT32 ncpCapacity;                          /* maximum number of connection points connectable */
+  UINT32 ncpSize;                             /* number of connection points actually connected */
+  UINT32 ncpCapacity;                         /* maximum number of connection points connectable */
+  IMalloc *pAllocator;                        /* pointer to allocator */
 } FIXEDCPDATA, *PFIXEDCPDATA;
 
 /*---------------------
@@ -64,6 +65,7 @@ CDECL_BEGIN
 
 /* QueryInterface helpers */
 extern HRESULT ObjHlpStandardQueryInterface_IConnectionPoint(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
+extern HRESULT ObjHlpStandardQueryInterface_IEnumConnections(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 extern HRESULT ObjHlpStandardQueryInterface_IMalloc(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 extern HRESULT ObjHlpStandardQueryInterface_ISequentialStream(IUnknown *pThis, REFIID riid, PPVOID ppvObject);
 
@@ -72,7 +74,7 @@ extern UINT32 ObjHlpStaticAddRefRelease(IUnknown *pThis);
 
 /* Connection point helpers */
 extern void ObjHlpFixedCpSetup(PFIXEDCPDATA pData, PUNKNOWN punkOuter, REFIID riidConnection,
-			       IUnknown **ppSlots, INT32 nSlots);
+			       IUnknown **ppSlots, UINT32 nSlots, IMalloc *pAllocator);
 extern void ObjHlpFixedCpTeardown(PFIXEDCPDATA pData);
 
 /* Other helpers */

@@ -94,6 +94,7 @@ HRESULT ObjHlpStandardQueryInterface_ ## iface (IUnknown *pThis, REFIID riid, PP
 } 
 
 MAKE_BASE_QI(IConnectionPoint)
+MAKE_BASE_QI(IEnumConnections)
 MAKE_BASE_QI(IMalloc)
 MAKE_BASE_QI(ISequentialStream)
 

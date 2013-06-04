@@ -29,42 +29,50 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-/*
- * This code is based on/inspired by jemalloc-3.3.1.  Please see LICENSE.jemalloc for further details.
- */
-#ifndef __HEAP_INTERNALS_H_INCLUDED
-#define __HEAP_INTERNALS_H_INCLUDED
+#ifndef __ENUMGENERIC_H_INCLUDED
+#define __ENUMGENERIC_H_INCLUDED
 
 #ifdef __COMROGUE_INTERNALS__
 
 #ifndef __ASM__
 
+#include <comrogue/types.h>
 #include <comrogue/objectbase.h>
-#include <comrogue/connpoint.h>
 #include <comrogue/allocator.h>
-#include <comrogue/heap.h>
-#include <comrogue/objhelp.h>
 
-/*----------------------------------
- * The actual heap data declaration
- *----------------------------------
+/*---------------------------------------------------------------------------------------------------
+ * Data structures for implementing IEnumUnknown or any interface that enumerates interface pointers
+ *---------------------------------------------------------------------------------------------------
  */
 
-typedef struct tagHEAPDATA {
-  IMalloc mallocInterface;                         /* pointer to IMalloc interface - MUST BE FIRST! */
-  IConnectionPointContainer cpContainerInterface;  /* pointer to IConnectionPointContainer interface */
-  UINT32 uiRefCount;                               /* reference count */
-  UINT32 uiFlags;                                  /* flags word */
-  PFNRAWHEAPDATAFREE pfnFreeRawHeapData;           /* pointer to function that frees the raw heap data, if any */
-  IChunkAllocator *pChunkAllocator;                /* chunk allocator pointer */
-  FIXEDCPDATA fcpMallocSpy;                        /* connection point for IMallocSpy */
-  FIXEDCPDATA fcpSequentialStream;                 /* connection point for ISequentialStream for debugging */
-  IMallocSpy *pMallocSpy;                          /* IMallocSpy interface for the allocator */
-  ISequentialStream *pDebugStream;                 /* debugging output stream */
-} HEAPDATA, *PHEAPDATA;
+typedef struct tagENUMGENERICDATA {
+  UINT32 uiRefCount;            /* reference count */
+  UINT32 nObjects;              /* count of IUnknown pointers */
+  PUNKNOWN rgObjects[0];        /* array of IUnknown pointers */
+} ENUMGENERICDATA, *PENUMGENERICDATA;
+
+typedef struct tagENUMGENERIC {
+  IEnumUnknown enumUnknown;     /* interface pointer */
+  UINT32 uiRefCount;            /* reference count */
+  REFIID riidActual;            /* IID of actual interface */
+  UINT32 nCurrent;              /* current pointer into array */
+  PENUMGENERICDATA pPayload;    /* payload array */
+  IMalloc *pAllocator;          /* allocator pointer */
+} ENUMGENERIC, *PENUMGENERIC;
+
+/*---------------------------------------------------------------------------------------------
+ * Functions for implementing IEnumUnknown or any interface that enumerates interface pointers
+ *---------------------------------------------------------------------------------------------
+ */
+
+extern PENUMGENERICDATA _ObjHlpAllocateEnumGenericData(IMalloc *pAllocator, UINT32 nCapacity);
+extern void _ObjHlpAddToEnumGenericData(PENUMGENERICDATA pegd, IUnknown *pUnk);
+extern void _ObjHlpDiscardEnumGenericData(PENUMGENERICDATA pecd);
+extern PENUMGENERIC _ObjHlpAllocateEnumGeneric(IMalloc *pAllocator, REFIID riidActual, PENUMGENERICDATA pegd,
+					       UINT32 nCurrent);
 
 #endif /* __ASM__ */
 
 #endif /* __COMROGUE_INTERNALS__ */
 
-#endif /* __HEAP_INTERNALS_H_INCLUDED */
+#endif /* __ENUMGENERIC_H_INCLUDED */

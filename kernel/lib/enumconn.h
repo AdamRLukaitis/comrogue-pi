@@ -29,60 +29,49 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-import "comrogue/object_types.idl";
+#ifndef __ENUMCONN_H_INCLUDED
+#define __ENUMCONN_H_INCLUDED
 
-/*--------------------
- * IUnknown interface
- *--------------------
+#ifdef __COMROGUE_INTERNALS__
+
+#ifndef __ASM__
+
+#include <comrogue/types.h>
+#include <comrogue/objectbase.h>
+#include <comrogue/connpoint.h>
+#include <comrogue/allocator.h>
+
+/*---------------------------------------------------
+ * Data structures for implementing IEnumConnections
+ *---------------------------------------------------
  */
 
-[object, uuid(00000000-0000-0000-C000-000000000046), pointer_default(unique)]
-interface IUnknown
-{
-  [unique] typedef IUnknown *PUNKNOWN;
-  HRESULT QueryInterface([in] REFIID riid, [out, iid_is(riid)] PPVOID ppvObject);
-  UINT32 AddRef();
-  UINT32 Release();
-}
+typedef struct tagENUMCONNDATA {
+  UINT32 uiRefCount;                  /* reference count */
+  UINT32 nConnectData;                /* count of CONNECTDATA */
+  CONNECTDATA rgConnectData[0];       /* array of CONNECTDATA */
+} ENUMCONNDATA, *PENUMCONNDATA;
 
-/*-------------------------
- * IClassFactory interface
- *-------------------------
+typedef struct tagENUMCONN {
+  IEnumConnections enumConnections;    /* interface pointer */
+  UINT32 uiRefCount;                   /* reference count */
+  UINT32 nCurrent;                     /* current pointer into array */
+  PENUMCONNDATA pPayload;              /* payload array */
+  IMalloc *pAllocator;                 /* allocator pointer */
+} ENUMCONN, *PENUMCONN;
+
+/*---------------------------------------------------
+ * Functions for implementing IEnumConnections
+ *---------------------------------------------------
  */
 
-[object, uuid(00000001-0000-0000-C000-000000000046), pointer_default(unique)]
-interface IClassFactory : IUnknown
-{
-  [unique] typedef IClassFactory *PCLASSFACTORY;
-  HRESULT CreateInstance([in, unique] IUnknown *punkOuter, [in] REFIID riid, [out, iid_is(riid)] PPVOID ppvObject);
-  HRESULT LockServer([in] BOOL fLock);
-}
+extern PENUMCONNDATA _ObjHlpAllocateEnumConnData(IMalloc *pAllocator, UINT32 nCapacity);
+extern void _ObjHlpAddToEnumConnData(PENUMCONNDATA pecd, IUnknown *pUnk, UINT32 uiCookie);
+extern void _ObjHlpDiscardEnumConnData(PENUMCONNDATA pecd);
+extern PENUMCONN _ObjHlpAllocateEnumConn(IMalloc *pAllocator, PENUMCONNDATA pecd, UINT32 nCurrent);
 
-/*----------------------------
- * IServiceProvider interface
- *----------------------------
- */
+#endif /* __ASM__ */
 
-[object, uuid(6d5140c1-7436-11ce-8034-00aa006009fa), pointer_default(unique)]
-interface IServiceProvider : IUnknown
-{
-  [unique] typedef IServiceProvider *PSERVICEPROVIDER;
-  HRESULT QueryService([in] REFGUID guidService, [in] REFIID riid, [out, iid_is(riid)] PPVOID ppvObject);
-}
+#endif /* __COMROGUE_INTERNALS__ */
 
-/*------------------------
- * IEnumUnknown interface
- *------------------------
- */
-
-[object, uuid(00000100-0000-0000-C000-000000000046), pointer_default(unique)]
-interface IEnumUnknown: IUnknown
-{
-  [unique] typedef IEnumUnknown *PENUMUNKNOWN;
-
-  HRESULT Next([in] UINT32 celt, [out, size_is(celt), length_is(*pceltFetched)] IUnknown **rgelt,
-	       [out] UINT32 *pceltFetched);
-  HRESULT Skip([in] UINT32 celt);
-  HRESULT Reset(void);
-  HRESULT Clone([out] IEnumUnknown **ppEnum);
-}
+#endif /* __ENUMCONN_H_INCLUDED */

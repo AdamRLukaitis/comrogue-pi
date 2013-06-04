@@ -46,10 +46,10 @@
 
 typedef struct tagRAWHEAPDATA
 {
-  UINT32 opaque[8];
+  UINT32 opaque[32];             /* opaque data, do not modify */
 } RAWHEAPDATA, *PRAWHEAPDATA;
 
-typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA prhd);
+typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA prhd); /* function that optionally frees the heap data */
 
 /*--------------------
  * External functions

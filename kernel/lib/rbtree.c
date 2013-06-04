@@ -82,7 +82,7 @@ INT32 RbtStdCompareByValue(TREEKEY k1, TREEKEY k2)
 static PRBTREENODE rotate_left(PRBTREENODE ptn)
 {
   register PRBTREENODE ptnNewRoot = rbtNodeRight(ptn);
-  ASSERT(ptnNewRoot);
+  //ASSERT(ptnNewRoot);
   rbtSetNodeRight(ptn, ptnNewRoot->ptnLeft);
   ptnNewRoot->ptnLeft = ptn;
   rbtSetNodeColor(ptnNewRoot, rbtNodeColor(ptn));
@@ -103,7 +103,7 @@ static PRBTREENODE rotate_left(PRBTREENODE ptn)
 static PRBTREENODE rotate_right(PRBTREENODE ptn)
 {
   register PRBTREENODE ptnNewRoot = ptn->ptnLeft;
-  ASSERT(ptnNewRoot);
+  //ASSERT(ptnNewRoot);
   ptn->ptnLeft = rbtNodeRight(ptnNewRoot);
   rbtSetNodeRight(ptnNewRoot, ptn);
   rbtSetNodeColor(ptnNewRoot, rbtNodeColor(ptn));
@@ -172,7 +172,7 @@ static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurrent, PRBTREENO
   if (!ptnCurrent)
     return ptnNew;  /* degenerate case */
   cmp = (*(ptree->pfnTreeCompare))(ptnNew->treekey, ptnCurrent->treekey);
-  ASSERT(cmp != 0);
+  //ASSERT(cmp != 0);
   if (cmp < 0)
     ptnCurrent->ptnLeft = insert_under(ptree, ptnCurrent->ptnLeft, ptnNew);
   else

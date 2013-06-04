@@ -93,6 +93,10 @@
 #define STG_S_CONSOLIDATIONFAILED    SCODE_CAST(0x00030205)    /* consolidation failed but commit OK */
 #define STG_S_CANNOTCONSOLIDATE      SCODE_CAST(0x00030206)    /* cannot consolidate but commit OK */
 
+/* Connection success codes */
+#define CONNECT_S_FIRST              SCODE_CAST(0x00040200)    /* first connection success code */
+#define CONNECT_S_LAST               SCODE_CAST(0x0004020F)    /* last connection success code */
+
 /* Memory manager success codes */
 #define MEMMGR_S_NONZEROED           SCODE_CAST(0x06010001)    /* returned memory is non-zeroed */
 
@@ -157,6 +161,15 @@
 #define STG_E_CSSSCRAMBLED           SCODE_CAST(0x80030309)    /* encrypted sector */
 #define STG_E_CSSINVALIDREGION       SCODE_CAST(0x8003030A)    /* region identifier mismatch */
 #define STG_E_NOMOREREGIONRESETS     SCODE_CAST(0x8003030B)    /* can't reset drive region anymore */
+
+/* Connection error codes */
+#define CONNECT_E_FIRST              SCODE_CAST(0x80040200)    /* first connection error code */
+#define CONNECT_E_LAST               SCODE_CAST(0x8004020F)    /* last connection error code */
+
+#define CONNECT_E_NOCONNECTION       (CONNECT_E_FIRST+0)       /* no connection found */
+#define CONNECT_E_ADVISELIMIT        (CONNECT_E_FIRST+1)       /* limit for number of connections reached */
+#define CONNECT_E_CANNOTCONNECT      (CONNECT_E_FIRST+2)       /* connection attempt failed */
+#define CONNECT_E_OVERRIDDEN         (CONNECT_E_FIRST+3)       /* interface overridden, must use derived */
 
 /* Memory manager error codes */
 #define MEMMGR_E_NOPGTBL             SCODE_CAST(0x86010001)    /* no page tables available */

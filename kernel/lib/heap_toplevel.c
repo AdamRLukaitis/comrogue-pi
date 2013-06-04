@@ -41,6 +41,8 @@
 #include <comrogue/internals/seg.h>
 #include "heap_internals.h"
 
+#define PHDFLAGS_DELETING   0x80000000           /* deleting the heap */
+
 /*------------------------
  * IMalloc implementation
  *------------------------
@@ -105,8 +107,11 @@ static UINT32 malloc_Release(IUnknown *pThis)
   PFNRAWHEAPDATAFREE pfnFree;        /* pointer to "free" function */
 
   rc = --(phd->uiRefCount);
-  if (rc == 0)
+  if ((rc == 0) && !(phd->uiFlags & PHDFLAGS_DELETING))
   {
+    phd->uiFlags |= PHDFLAGS_DELETING;
+    ObjHlpFixedCpTeardown(&(phd->fcpMallocSpy));
+    ObjHlpFixedCpTeardown(&(phd->fcpSequentialStream));
     IUnknown_Release(phd->pChunkAllocator);
     if (phd->pfnFreeRawHeapData)
     {
@@ -218,12 +223,26 @@ static UINT32 cpc_Release(IUnknown *pThis)
 
 static HRESULT cpc_EnumConnectionPoints(IConnectionPointContainer *pThis, IEnumConnectionPoints **ppEnum)
 {
+  PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
+
   return E_NOTIMPL; /* TODO */
 }
 
 static HRESULT cpc_FindConnectionPoint(IConnectionPointContainer *pThis, REFIID riid, IConnectionPoint **ppCP)
 {
-  return E_NOTIMPL; /* TODO */
+  PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
+
+  if (!ppCP)
+    return E_POINTER;
+  *ppCP = NULL;
+  if (IsEqualIID(riid, &IID_IMallocSpy))
+    *ppCP = (IConnectionPoint *)(&(phd->fcpMallocSpy));
+  else if (IsEqualIID(riid, &IID_ISequentialStream))
+    *ppCP = (IConnectionPoint *)(&(phd->fcpSequentialStream));
+  else
+    return CONNECT_E_NOCONNECTION;
+  IUnknown_AddRef(*ppCP);
+  return S_OK;
 }
 
 /* The IConnectionPointContainer vtable. */
@@ -272,9 +291,13 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocato
   phd->mallocInterface.pVTable = &vtblMalloc;
   phd->cpContainerInterface.pVTable = &vtblConnectionPointContainer;
   phd->uiRefCount = 1;
+  phd->uiFlags = 0;
   phd->pfnFreeRawHeapData = pfnFree;
   phd->pChunkAllocator = pChunkAllocator;
   IUnknown_AddRef(phd->pChunkAllocator);
+  ObjHlpFixedCpSetup(&(phd->fcpMallocSpy), (PUNKNOWN)phd, &IID_IMallocSpy, (IUnknown **)(&(phd->pMallocSpy)), 1, NULL);
+  ObjHlpFixedCpSetup(&(phd->fcpSequentialStream), (PUNKNOWN)phd, &IID_ISequentialStream,
+		     (IUnknown **)(&(phd->pDebugStream)), 1, NULL);
 
   *ppHeap = (IMalloc *)phd;
   return S_OK;
