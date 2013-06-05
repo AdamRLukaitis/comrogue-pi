@@ -84,7 +84,7 @@ UINT64 __qdivrem(UINT64 uq, UINT64 vq, PUINT64 pRem)
    */
   if (vq == 0)
   { /* divide by zero. */
-    SEG_RODATA static volatile const unsigned int zero = 0;
+    static const SEG_RODATA unsigned int zero = 0;
 
     tmp.ul[H] = tmp.ul[L] = 1 / zero;
     if (pRem)

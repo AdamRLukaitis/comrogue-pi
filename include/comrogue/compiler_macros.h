@@ -53,6 +53,13 @@
 
 #endif /* __cplusplus */
 
+/*----------------------------
+ * Additional compiler macros
+ *----------------------------
+ */
+
+#define UNUSED(var)   ((void)var)
+
 #endif /* __ASM__ */
 
 #endif /* __COMPILER_MACROS_H_INCLUDED */

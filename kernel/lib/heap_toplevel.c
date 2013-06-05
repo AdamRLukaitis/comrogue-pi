@@ -32,6 +32,7 @@
 /*
  * This code is based on/inspired by jemalloc-3.3.1.  Please see LICENSE.jemalloc for further details.
  */
+#include <comrogue/compiler_macros.h>
 #include <comrogue/types.h>
 #include <comrogue/str.h>
 #include <comrogue/objhelp.h>
@@ -125,32 +126,140 @@ static UINT32 malloc_Release(IUnknown *pThis)
 
 static PVOID malloc_Alloc(IMalloc *pThis, SIZE_T cb)
 {
-  return NULL; /* TODO */
+  PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
+  SIZE_T cbActual = cb;              /* actual number of bytes requested */
+  PVOID rc;                          /* return from this function */
+
+  /* handle PreAlloc call */
+  if (phd->pMallocSpy)
+  {
+    cbActual = IMallocSpy_PreAlloc(phd->pMallocSpy, cb);
+    if ((cbActual == 0) && (cb != 0))
+      return NULL;  /* simulated memory failure */
+  }
+
+  rc = NULL; /* TODO */
+
+  /* handle PostAlloc call */
+  if (phd->pMallocSpy)
+    rc = IMallocSpy_PostAlloc(phd->pMallocSpy, rc);
+
+  return rc;
+}
+
+static BOOL isSpyedByCurrentSpy(PHEAPDATA phd, PVOID pBlock)
+{
+  return FALSE; /* TODO */
 }
 
 static PVOID malloc_Realloc(IMalloc *pThis, PVOID pv, SIZE_T cb)
 {
-  return NULL; /* TODO */
+  PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
+  PVOID pvActual = pv;               /* actual heap block pointer */
+  SIZE_T cbActual = cb;              /* actual number of bytes requested */
+  PVOID rc;                          /* return from this function */
+  BOOL fSpyed;                       /* were we allocated while currently spyed on? */
+
+  /* handle PreRealloc call */
+  if (phd->pMallocSpy)
+  {
+    fSpyed = isSpyedByCurrentSpy(phd, pv);
+    cbActual = IMallocSpy_PreRealloc(phd->pMallocSpy, pv, cb, &pvActual, fSpyed);
+    if ((cbActual == 0) && (cb != 0))
+      return NULL; /* simulated memory failure */
+  }
+
+  rc = NULL; /* TODO */
+
+  /* handle PostRealloc call */
+  if (phd->pMallocSpy)
+    rc = IMallocSpy_PostRealloc(phd->pMallocSpy, rc, fSpyed);
+
+  return rc;
 }
 
 static void malloc_Free(IMalloc *pThis, PVOID pv)
 {
+  PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
+  PVOID pvActual = pv;               /* actual heap block pointer */
+  BOOL fSpyed;                       /* were we allocated while currently spyed on? */
+
+  /* handle PreFree call */
+  if (phd->pMallocSpy)
+  {
+    fSpyed = isSpyedByCurrentSpy(phd, pv);
+    pvActual = IMallocSpy_PreFree(phd->pMallocSpy, pv, fSpyed);
+  }
+
   /* TODO */
+  UNUSED(pvActual);
+
+  /* handle PostFree call */
+  if (phd->pMallocSpy)
+    IMallocSpy_PostFree(phd->pMallocSpy, fSpyed);
 }
 
 static SIZE_T malloc_GetSize(IMalloc *pThis, PVOID pv)
 {
-  return -1; /* TODO */
+  PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
+  PVOID pvActual = pv;               /* actual heap block pointer */
+  BOOL fSpyed;                       /* were we allocated while currently spyed on? */
+  SIZE_T rc;                         /* return from this function */
+
+  /* handle PreGetSize call */
+  if (phd->pMallocSpy)
+  {
+    fSpyed = isSpyedByCurrentSpy(phd, pv);
+    pvActual = IMallocSpy_PreGetSize(phd->pMallocSpy, pv, fSpyed);
+  }
+
+  rc = -1;  /* TODO */
+  UNUSED(pvActual);
+
+  /* handle PostGetSize call */
+  if (phd->pMallocSpy)
+    rc = IMallocSpy_PostGetSize(phd->pMallocSpy, rc, fSpyed);
+
+  return rc;
 }
 
 static INT32 malloc_DidAlloc(IMalloc *pThis, PVOID pv)
 {
-  return -1; /* TODO */
+  PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
+  PVOID pvActual = pv;               /* actual heap block pointer */
+  BOOL fSpyed;                       /* were we allocated while currently spyed on? */
+  INT32 rc;                          /* return from this function */
+
+  /* handle PreDidAlloc call */
+  if (phd->pMallocSpy)
+  {
+    fSpyed = isSpyedByCurrentSpy(phd, pv);
+    pvActual = IMallocSpy_PreDidAlloc(phd->pMallocSpy, pv, fSpyed);
+  }
+
+  rc = -1; /* TODO */
+  UNUSED(pvActual);
+
+  /* handle PostDidAlloc call */
+  if (phd->pMallocSpy)
+    rc = IMallocSpy_PostDidAlloc(phd->pMallocSpy, pv, fSpyed, rc);
+
+  return rc;
 }
 
 static void malloc_HeapMinimize(IMalloc *pThis)
 {
+  PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
+
+  /* handle PreHeapMinimize call */
+  if (phd->pMallocSpy)
+    IMallocSpy_PreHeapMinimize(phd->pMallocSpy);
+
   /* TODO */
+
+  /* handle PostHeapMinimize call */
+  if (phd->pMallocSpy)
+    IMallocSpy_PostHeapMinimize(phd->pMallocSpy);
 }
 
 /* The IMalloc vtable. */
