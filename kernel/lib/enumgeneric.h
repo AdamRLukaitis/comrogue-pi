@@ -47,6 +47,7 @@
 
 typedef struct tagENUMGENERICDATA {
   UINT32 uiRefCount;            /* reference count */
+  REFIID riidObjects;           /* IID of underlying objects */
   UINT32 nObjects;              /* count of IUnknown pointers */
   PUNKNOWN rgObjects[0];        /* array of IUnknown pointers */
 } ENUMGENERICDATA, *PENUMGENERICDATA;
@@ -65,9 +66,9 @@ typedef struct tagENUMGENERIC {
  *---------------------------------------------------------------------------------------------
  */
 
-extern PENUMGENERICDATA _ObjHlpAllocateEnumGenericData(IMalloc *pAllocator, UINT32 nCapacity);
+extern PENUMGENERICDATA _ObjHlpAllocateEnumGenericData(IMalloc *pAllocator, REFIID riidObjects, UINT32 nCapacity);
 extern void _ObjHlpAddToEnumGenericData(PENUMGENERICDATA pegd, IUnknown *pUnk);
-extern void _ObjHlpDiscardEnumGenericData(PENUMGENERICDATA pecd);
+extern void _ObjHlpDiscardEnumGenericData(PENUMGENERICDATA pegd);
 extern PENUMGENERIC _ObjHlpAllocateEnumGeneric(IMalloc *pAllocator, REFIID riidActual, PENUMGENERICDATA pegd,
 					       UINT32 nCurrent);
 

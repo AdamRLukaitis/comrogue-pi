@@ -36,6 +36,7 @@
 #include <comrogue/connpoint.h>
 #include <comrogue/allocator.h>
 #include <comrogue/objhelp.h>
+#include <comrogue/internals/seg.h>
 #include "enumconn.h"
 
 /*-------------------------------------------

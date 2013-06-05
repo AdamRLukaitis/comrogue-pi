@@ -40,6 +40,7 @@
 #include <comrogue/heap.h>
 #include <comrogue/internals/seg.h>
 #include "heap_internals.h"
+#include "enumgeneric.h"
 
 #define PHDFLAGS_DELETING   0x80000000           /* deleting the heap */
 
@@ -221,13 +222,64 @@ static UINT32 cpc_Release(IUnknown *pThis)
   return malloc_Release((IUnknown *)HeapDataPtr(pThis));
 }
 
+/*
+ * Creates an enumerator object to iterate through all the connection points in this container.
+ *
+ * Parameters:
+ * - pThis = Pointer to the ConnectionPointContainer interface in the heap data object.
+ * - ppEnum = Pointer to a variable to receive a new reference to IEnumConnectionPoints.
+ *
+ * Returns:
+ * - S_OK = Enumerator created successfully; pointer to it in *ppEnum.
+ * - E_OUTOFMEMORY = Unable to allocate the enumerator; *ppEnum is NULL.
+ * - E_POINTER = The ppEnum pointer is not valid.
+ */
 static HRESULT cpc_EnumConnectionPoints(IConnectionPointContainer *pThis, IEnumConnectionPoints **ppEnum)
 {
   PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
+  PENUMGENERICDATA pegd;     /* pointer to data block */
+  PENUMGENERIC peg;          /* pointer to enumerator */
 
-  return E_NOTIMPL; /* TODO */
+  if (!ppEnum)
+    return E_POINTER;
+  *ppEnum = NULL;
+
+  /* Allocate the data block. */
+  pegd = _ObjHlpAllocateEnumGenericData((IMalloc *)phd, &IID_IConnectionPoint, 2);
+  if (!pegd)
+    return E_OUTOFMEMORY;
+
+  /* Build the data block. */
+  _ObjHlpAddToEnumGenericData(pegd, (IUnknown *)(&(phd->fcpMallocSpy)));
+  _ObjHlpAddToEnumGenericData(pegd, (IUnknown *)(&(phd->fcpSequentialStream)));
+
+  /* Allocate the enumerator. */
+  peg = _ObjHlpAllocateEnumGeneric((IMalloc *)phd, &IID_IEnumConnectionPoints, pegd, 0);
+  if (peg)
+  {
+    IUnknown_QueryInterface((IUnknown *)peg, &IID_IEnumConnectionPoints, (PPVOID)ppEnum);
+    return S_OK;
+  }
+
+  /* Enumerator allocation failed?!? */
+  _ObjHlpDiscardEnumGenericData(pegd);
+  malloc_Free((IMalloc *)phd, pegd);
+  return E_OUTOFMEMORY;
 }
 
+/*
+ * Returns a reference to the IConnectionPoint interface corresponding to a specific outgoing IID.
+ *
+ * Parameters:
+ * - pThis = Pointer to the ConnectionPointContainer interface in the heap data object.
+ * - riid = IID of the outgoing interface to get the connection point for.
+ * - ppCP = Pointer to a variable to receive the IConnectionPoint interface pointer.
+ *
+ * Returns:
+ * - S_OK = Found connection point; interface pointer is in *ppCP.
+ * - E_POINTER = The ppCP pointer is not valid.
+ * - CONNECT_E_NOCONNECTION = The object does not support the interface indicated by riid. *ppCP is NULL.
+ */
 static HRESULT cpc_FindConnectionPoint(IConnectionPointContainer *pThis, REFIID riid, IConnectionPoint **ppCP)
 {
   PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
