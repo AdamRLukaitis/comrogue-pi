@@ -49,7 +49,8 @@
 
 /* Nodes in the page table tree. */
 typedef struct tagPAGENODE {
-  RBTREENODE rbtn;           /* RBT node containing physical address as key */
+  RBTREENODE rbtn;           /* RBT node */
+  PHYSADDR paPageTable;      /* physical address of page table */
   PPAGETAB ppt;              /* pointer to page table */
 } PAGENODE, *PPAGENODE;
 

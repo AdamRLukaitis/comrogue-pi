@@ -57,48 +57,56 @@ typedef INT32 (*PFNTREECOMPARE)(TREEKEY, TREEKEY);
 
 /* The basic tree node. */
 typedef struct tagRBTREENODE {
-  struct tagRBTREENODE *ptnLeft;    /* pointer to left child */
-  UINT_PTR ptnRightColor;           /* pointer to right child AND color stored in low-order bit */
-  TREEKEY treekey;                  /* key value */
+  struct tagRBTREENODE *ptnLeft;  /* pointer to left child */
+  UINT_PTR ptnRightColor;         /* pointer to right child AND color stored in low-order bit */
 } RBTREENODE, *PRBTREENODE;
 
-/* Tree node macros, mostly to access either color or pointer or both from the ptnRightColor field */
+/* Tree node macros, mostly to access either color or pointer or both from the pRightColor field */
 #define rbtNodeRight(ptn)  ((PRBTREENODE)((ptn)->ptnRightColor & ~1))
 #define rbtNodeColor(ptn)  ((ptn)->ptnRightColor & 1)
 #define rbtIsRed(ptn)      ((ptn) ? rbtNodeColor(ptn) : FALSE)
 #define rbtSetNodeRight(ptn, ptnR) \
-        do { (ptn)->ptnRightColor = (((UINT_PTR)(ptnR)) & ~1) | ((ptn)->ptnRightColor & 1); } while (0)
+  do { (ptn)->ptnRightColor = (((UINT_PTR)(ptnR)) & ~1) | ((ptn)->ptnRightColor & 1); } while (0)
 #define rbtSetNodeColor(ptn, clr) \
         do { (ptn)->ptnRightColor = ((ptn)->ptnRightColor & ~1) | ((clr) ? 1 : 0); } while (0)
 #define rbtToggleColor(ptn) do { if (ptn) (ptn)->ptnRightColor ^= 1; } while (0)
-#define rbtInitNode(ptn, ptnL, ptnR, clr, key) \
-  do { (ptn)->ptnLeft = (ptnL); (ptn)->ptnRightColor = (((UINT_PTR)(ptnR)) & ~1) | ((clr) ? 1 : 0); \
-       (ptn)->treekey = (TREEKEY)(key); } while (0)
-#define rbtNewNode(ptn, key) rbtInitNode(ptn, NULL, NULL, RED, key)
+#define rbtInitNode(ptn, ptnL, ptnR, clr) \
+  do { (ptn)->ptnLeft = (ptnL); (ptn)->ptnRightColor = (((UINT_PTR)(ptnR)) & ~1) | ((clr) ? 1 : 0); } while (0)
+#define rbtNewNode(ptn) rbtInitNode(ptn, NULL, NULL, RED)
+
+/* Accessor functions common to tree instances. */
+typedef TREEKEY (*PFNGETTREEKEY)(PVOID);
+typedef PRBTREENODE (*PFNGETTREENODEPTR)(PVOID);
+typedef PVOID (*PFNGETFROMTREENODEPTR)(PRBTREENODE);
 
 /* The head-of-tree structure. */
 typedef struct tagRBTREE {
-  PFNTREECOMPARE pfnTreeCompare;   /* pointer to comparison function */
-  PRBTREENODE ptnRoot;             /* pointer to root of tree */
+  PFNTREECOMPARE pfnTreeCompare;            /* pointer to comparison function */
+  PFNGETTREEKEY pfnGetTreeKey;              /* pointer to key-retrieval function */
+  PFNGETTREENODEPTR pfnGetNodePtr;          /* pointer to node-pointer retrieval function */
+  PFNGETFROMTREENODEPTR pfnGetFromNodePtr;  /* pointer to func to get the tree node from node pointer */
+  PRBTREENODE ptnRoot;                      /* pointer to root of tree */
 } RBTREE, *PRBTREE;
 
 /* Tree macros. */
-#define rbtInitTree(ptree, pfnCompare) \
-        do { (ptree)->pfnTreeCompare = (pfnCompare); (ptree)->ptnRoot = NULL; } while (0)
+#define rbtInitTree(ptree, pfnCompare, pfnGetKey, pfnToNodePtr, pfnFromNodePtr)	\
+  do { (ptree)->pfnTreeCompare = (pfnCompare); (ptree)->pfnGetTreeKey = (pfnGetKey); \
+       (ptree)->pfnGetNodePtr = (pfnToNodePtr); (ptree)->pfnGetFromNodePtr = (pfnFromNodePtr); \
+       (ptree)->ptnRoot = NULL; } while (0)
 #define rbtIsEmpty(ptree)  MAKEBOOL(!((ptree)->ptnRoot))
 
 /* Type of function used by RbtWalk. */
-typedef BOOL (*PFNRBTWALK)(PRBTREE, PRBTREENODE, PVOID);
+typedef BOOL (*PFNRBTWALK)(PRBTREE, PVOID, PVOID);
 
 /* Function prototypes. */
 CDECL_BEGIN
 
 extern INT32 RbtStdCompareByValue(TREEKEY k1, TREEKEY k2);
-extern void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew);
-extern PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key);
-extern PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key);
-extern PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key);
-extern PRBTREENODE RbtFindMin(PRBTREE ptree);
+extern void RbtInsert(PRBTREE ptree, PVOID ptnNew);
+extern PVOID RbtFind(PRBTREE ptree, TREEKEY key);
+extern PVOID RbtFindPredecessor(PRBTREE ptree, TREEKEY key);
+extern PVOID RbtFindSuccessor(PRBTREE ptree, TREEKEY key);
+extern PVOID RbtFindMin(PRBTREE ptree);
 extern void RbtDelete(PRBTREE ptree, TREEKEY key);
 extern BOOL RbtWalk(PRBTREE ptree, PFNRBTWALK pfnWalk, PVOID pData);
 

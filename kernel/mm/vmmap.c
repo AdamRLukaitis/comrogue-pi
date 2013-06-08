@@ -62,6 +62,53 @@ static VMCTXT g_vmctxtKernel = {      /* kernel VM context */
 static RBTREE g_rbtFreePageTables;    /* tree containing free page tables */
 static PFNSETPTEADDR g_pfnSetPTEAddr = NULL;  /* hook function into page database */
 
+/*-----------------------------------
+ * Red-black tree accessor functions
+ *-----------------------------------
+ */
+
+/*
+ * Given a pointer to a PAGENODE, returns its key (the physical address of the page table).
+ *
+ * Parameters:
+ * - ppgn = Pointer to a PAGENODE.
+ *
+ * Returns:
+ * The PAGENODE's key value (the physical address of the page table).
+ */
+static TREEKEY get_key_from_pagenode(PVOID ppgn)
+{
+  return (TREEKEY)(((PPAGENODE)ppgn)->paPageTable);
+}
+
+/*
+ * Given a pointer to a PAGENODE, returns a pointer to the RBTREENODE contained within it.
+ *
+ * Parameters:
+ * - ppgn = Pointer to a PAGENODE.
+ *
+ * Returns:
+ * The PAGENODE's embedded RBTREENODE.
+ */
+static PRBTREENODE get_rbtreenode_from_pagenode(PVOID ppgn)
+{
+  return &(((PPAGENODE)ppgn)->rbtn);
+}
+
+/*
+ * Given a pointer to a RBTREENODE, returns a pointer to the PAGENODE it's embedded in.
+ *
+ * Parameters:
+ * - ptn = Pointer to an RBTREENODE.
+ *
+ * Returns:
+ * The pointer to the PAGENODE the RBTREENODE is embedded in.
+ */
+static PVOID get_pagenode_from_rbtreenode(PRBTREENODE ptn)
+{
+  return (PVOID)(((PCHAR)ptn) - OFFSETOF(PAGENODE, rbtn));
+}
+
 /*------------------------------
  * Inline resolution operations
  *------------------------------
@@ -194,8 +241,8 @@ static void free_page_table(PVMCTXT pvmctxt, PPAGETAB ppgt)
   if (ppgn)
   {
     RbtDelete(&(pvmctxt->rbtPageTables), (TREEKEY)pa);
-    rbtNewNode(&(ppgn->rbtn), ppgn->rbtn.treekey);
-    RbtInsert(&g_rbtFreePageTables, (PRBTREENODE)ppgn);
+    rbtNewNode(&(ppgn->rbtn));
+    RbtInsert(&g_rbtFreePageTables, ppgn);
   }
 }
 
@@ -681,12 +728,14 @@ static HRESULT alloc_page_table(PVMCTXT pvmctxt, PTTB pttbEntry, PTTBAUX pttbAux
 	      ppgn = IMalloc_Alloc(g_pMalloc, sizeof(PAGENODE));
 	    if (ppgnFree && ppgn)
 	    { /* prepare the new nodes and insert them in their respective trees */
-	      rbtNewNode(&(ppgnFree->rbtn), paNewPage + sizeof(PAGETAB));
+	      rbtNewNode(&(ppgnFree->rbtn));
+	      ppgnFree->paPageTable = paNewPage + sizeof(PAGETAB);
 	      ppgnFree->ppt = ((PPAGETAB)kaNewPage) + 1;
-	      RbtInsert(&g_rbtFreePageTables, (PRBTREENODE)ppgnFree);
-	      rbtNewNode(&(ppgn->rbtn), paNewPage);
+	      RbtInsert(&g_rbtFreePageTables, ppgnFree);
+	      rbtNewNode(&(ppgn->rbtn));
+	      ppgn->paPageTable = paNewPage;
 	      ppgn->ppt = (PPAGETAB)kaNewPage;
-	      RbtInsert(&(pvmctxt->rbtPageTables), (PRBTREENODE)ppgn);
+	      RbtInsert(&(pvmctxt->rbtPageTables), ppgn);
 	    }
 	    else
 	    { /* could not allocate both, free one if was allocated */
@@ -712,15 +761,15 @@ static HRESULT alloc_page_table(PVMCTXT pvmctxt, PTTB pttbEntry, PTTBAUX pttbAux
   else
   { /* get the first item out of the free-pages tree and reinsert it into the current VM context */
     ppgn = (PPAGENODE)RbtFindMin(&g_rbtFreePageTables);
-    RbtDelete(&g_rbtFreePageTables, ppgn->rbtn.treekey);
-    rbtNewNode(&(ppgn->rbtn), ppgn->rbtn.treekey);
-    RbtInsert(&(pvmctxt->rbtPageTables), (PRBTREENODE)ppgn);
+    RbtDelete(&g_rbtFreePageTables, (TREEKEY)(ppgn->paPageTable));
+    rbtNewNode(&(ppgn->rbtn));
+    RbtInsert(&(pvmctxt->rbtPageTables), ppgn);
   }
 
   if (SUCCEEDED(hr))
   { /* prepare new page table and insert it into the TTB */
     StrSetMem(ppgn->ppt, 0, sizeof(PAGETAB));
-    pttbEntry->data = (PHYSADDR)(ppgn->rbtn.treekey) | uiTableFlags;  /* poke new entry */
+    pttbEntry->data = ppgn->paPageTable | uiTableFlags;  /* poke new entry */
     pttbAuxEntry->data = TTBAUXFLAGS_PAGETABLE;
     *pppt = ppgn->ppt;
   }
@@ -1066,8 +1115,10 @@ SEG_INIT_CODE void _MmInitVMMap(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap)
   g_vmctxtKernel.pTTB = (PTTB)(pstartup->kaTTB);
   g_vmctxtKernel.pTTBAux = (PTTBAUX)(pstartup->kaTTBAux);
   g_vmctxtKernel.paTTB = pstartup->paTTB;
-  rbtInitTree(&(g_vmctxtKernel.rbtPageTables), RbtStdCompareByValue);
-  rbtInitTree(&g_rbtFreePageTables, RbtStdCompareByValue);
+  rbtInitTree(&(g_vmctxtKernel.rbtPageTables), RbtStdCompareByValue, get_key_from_pagenode,
+	      get_rbtreenode_from_pagenode, get_pagenode_from_rbtreenode);
+  rbtInitTree(&g_rbtFreePageTables, RbtStdCompareByValue, get_key_from_pagenode, get_rbtreenode_from_pagenode,
+	      get_pagenode_from_rbtreenode);
 
   /*
    * Load all the page tables we know about.  They all get mapped in as part of the kernel context, except if
@@ -1084,19 +1135,21 @@ SEG_INIT_CODE void _MmInitVMMap(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap)
     /* allocate node for first page table on page */
     ppgn = IMalloc_Alloc(g_pMalloc, sizeof(PAGENODE));
     ASSERT(ppgn);
-    rbtNewNode(&(ppgn->rbtn), paPageTable);
+    rbtNewNode(&(ppgn->rbtn));
+    ppgn->paPageTable = paPageTable;
     ppgn->ppt = (PPAGETAB)kaPageTable;
-    RbtInsert(&(g_vmctxtKernel.rbtPageTables), (PRBTREENODE)ppgn);
+    RbtInsert(&(g_vmctxtKernel.rbtPageTables), ppgn);
 
     /* allocate node for second page table on page */
     ppgn = IMalloc_Alloc(g_pMalloc, sizeof(PAGENODE));
     ASSERT(ppgn);
-    rbtNewNode(&(ppgn->rbtn), paPageTable + sizeof(PAGETAB));
+    rbtNewNode(&(ppgn->rbtn));
+    ppgn->paPageTable = paPageTable + sizeof(PAGETAB);
     ppgn->ppt = ((PPAGETAB)kaPageTable) + 1;
     if ((i == (pstartup->cpgPageTables - 1)) && pstartup->ctblFreeOnLastPage)
-      RbtInsert(&g_rbtFreePageTables, (PRBTREENODE)ppgn);
+      RbtInsert(&g_rbtFreePageTables, ppgn);
     else
-      RbtInsert(&(g_vmctxtKernel.rbtPageTables), (PRBTREENODE)ppgn);
+      RbtInsert(&(g_vmctxtKernel.rbtPageTables), ppgn);
 
     paPageTable += SYS_PAGE_SIZE;  /* advance to next page table page */
   }

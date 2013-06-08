@@ -44,9 +44,9 @@ OBJCOPY := $(ARMDIR)/$(ARMPREFIX)-objcopy
 # Define the default flags for compilation.
 DEFS := -D__COMROGUE_INTERNALS__
 INCLUDES := -I$(CRBASEDIR)/include -I$(CRBASEDIR)/idl
-CFLAGS := $(INCLUDES) -mabi=aapcs -mfloat-abi=hard -mcpu=arm1176jzf-s -Wall -O2 \
+CFLAGS := $(INCLUDES) -mabi=aapcs -mfloat-abi=hard -mcpu=arm1176jzf-s -Wall -Werror -O2 \
 	  -nostdlib -nostartfiles -ffreestanding $(DEFS)
-AFLAGS := -mcpu=arm1176jzf-s -mfloat-abi=hard
+AFLAGS := -mcpu=arm1176jzf-s -mfloat-abi=hard --fatal-warnings
 ASM_CPP_FLAGS := $(INCLUDES) $(DEFS) -D__ASM__
 
 # Standard rule for pre-processing linker script files.

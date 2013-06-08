@@ -31,12 +31,6 @@
  */
 #include <comrogue/types.h>
 #include <comrogue/internals/rbtree.h>
-#include <comrogue/internals/trace.h>
-
-#ifdef THIS_FILE
-#undef THIS_FILE
-DECLARE_THIS_FILE
-#endif
 
 /*------------------------------------------------------------------------------------------------------
  * An implementation of left-leaning red-black 2-3 trees as detailed in "Left-leaning Red-Black Trees,"
@@ -155,8 +149,9 @@ static PRBTREENODE fix_up(PRBTREENODE ptn)
  * - ptree = Pointer to the tree head structure, containing the compare function.
  * - ptnCurrent = Pointer to the current subtree we're inserting into.
  * - ptnNew = Pointer to the new tree node to be inserted.  This node must have been initialized with
- *            the rbtInitNode macro to contain a key, NULL left and right pointers, and be red.  It is
+ *            the rbtInitNode macro to contain NULL left and right pointers and be red.  It is
  *            assumed that the node's key does NOT already exist in the tree.
+ * - keyNew = Tree key for the new node.
  *
  * Returns:
  * The pointer to the new subtree after the insertion is performed.
@@ -165,18 +160,20 @@ static PRBTREENODE fix_up(PRBTREENODE ptn)
  * This function is recursive; however, the nature of the tree guarantees that the stack space consumed
  * by its stack frames will be O(log n).
  */
-static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurrent, PRBTREENODE ptnNew)
+static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurrent, PRBTREENODE ptnNew, TREEKEY keyNew)
 {
   register int cmp;  /* compare result */
+  register TREEKEY keyCurrent;
 
   if (!ptnCurrent)
     return ptnNew;  /* degenerate case */
-  cmp = (*(ptree->pfnTreeCompare))(ptnNew->treekey, ptnCurrent->treekey);
+  keyCurrent = (*(ptree->pfnGetTreeKey))((*(ptree->pfnGetFromNodePtr))(ptnCurrent));
+  cmp = (*(ptree->pfnTreeCompare))(keyNew, keyCurrent);
   //ASSERT(cmp != 0);
   if (cmp < 0)
-    ptnCurrent->ptnLeft = insert_under(ptree, ptnCurrent->ptnLeft, ptnNew);
+    ptnCurrent->ptnLeft = insert_under(ptree, ptnCurrent->ptnLeft, ptnNew, keyNew);
   else
-    rbtSetNodeRight(ptnCurrent, insert_under(ptree, rbtNodeRight(ptnCurrent), ptnNew));
+    rbtSetNodeRight(ptnCurrent, insert_under(ptree, rbtNodeRight(ptnCurrent), ptnNew, keyNew));
   return fix_up(ptnCurrent);
 }
 
@@ -185,16 +182,17 @@ static PRBTREENODE insert_under(PRBTREE ptree, PRBTREENODE ptnCurrent, PRBTREENO
  *
  * Parameters:
  * - ptree = Pointer to the tree head structure.
- * - ptnNew = Pointer to the new tree node to be inserted.  This node must have been initialized with
- *            the rbtInitNode macro to contain a key, NULL left and right pointers, and be red.  It is
- *            assumed that the node's key does NOT already exist in the tree.
+ * - pNew = Pointer to the new tree node to be inserted.  This node must have been initialized with
+ *          the rbtInitNode macro to contain NULL left and right pointers, and be red.  It is
+ *          assumed that the node's key does NOT already exist in the tree.
  *
  * Returns:
  * Nothing.
  */
-void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew)
+void RbtInsert(PRBTREE ptree, PVOID pNew)
 {
-  ptree->ptnRoot = insert_under(ptree, ptree->ptnRoot, ptnNew);
+  ptree->ptnRoot = insert_under(ptree, ptree->ptnRoot, (*(ptree->pfnGetNodePtr))(pNew),
+				(*(ptree->pfnGetTreeKey))(pNew));
   rbtSetNodeColor(ptree->ptnRoot, BLACK);
 }
 
@@ -208,23 +206,25 @@ void RbtInsert(PRBTREE ptree, PRBTREENODE ptnNew)
  * Returns:
  * Pointer to the node where the key is found, or NULL if not found.
  */
-PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key)
+PVOID RbtFind(PRBTREE ptree, TREEKEY key)
 {
+  register PVOID pCurrent;  /* pointer to current node */
   register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
   register int cmp;  /* compare result */
 
   while (ptn)
   {
-    cmp = (*(ptree->pfnTreeCompare))(key, ptn->treekey);
+    pCurrent = (*(ptree->pfnGetFromNodePtr))(ptn);
+    cmp = (*(ptree->pfnTreeCompare))(key, (*(ptree->pfnGetTreeKey))(pCurrent));
     if (cmp == 0)
-      break;  /* found */
+      return pCurrent;  /* found */
     else if (cmp < 0)
       ptn = ptn->ptnLeft;
     else
       ptn = rbtNodeRight(ptn);
   }
 
-  return ptn;
+  return NULL;
 }
 
 /*
@@ -239,27 +239,29 @@ PRBTREENODE RbtFind(PRBTREE ptree, TREEKEY key)
  * Pointer to the node where the key is found, or pointer to the predecessor node, or NULL if the key
  * is less than every key in the tree and hence has no predecessor.
  */
-PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
+PVOID RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
 {
+  register PVOID pCurrent;  /* pointer to current node */
   register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
   register int cmp;  /* compare result */
 
   while (ptn)
   {
-    cmp = (*(ptree->pfnTreeCompare))(key, ptn->treekey);
+    pCurrent = (*(ptree->pfnGetFromNodePtr))(ptn);
+    cmp = (*(ptree->pfnTreeCompare))(key, (*(ptree->pfnGetTreeKey))(pCurrent));
     if (cmp == 0)
-      break;  /* found */
+      return pCurrent;  /* found */
     else if (cmp > 0)
     {
       if (rbtNodeRight(ptn))
 	ptn = rbtNodeRight(ptn);
       else
-	break;  /* found predecessor */
+	return pCurrent; /* found predecessor */
     }
     else
       ptn = ptn->ptnLeft;
   }
-  return ptn;
+  return NULL; /* not found */
 }
 
 /*
@@ -274,27 +276,29 @@ PRBTREENODE RbtFindPredecessor(PRBTREE ptree, TREEKEY key)
  * Pointer to the node where the key is found, or pointer to the successor node, or NULL if the key
  * is greater than every key in the tree and hence has no successor.
  */
-PRBTREENODE RbtFindSuccessor(PRBTREE ptree, TREEKEY key)
+PVOID RbtFindSuccessor(PRBTREE ptree, TREEKEY key)
 {
+  register PVOID pCurrent;  /* pointer to current node */
   register PRBTREENODE ptn = ptree->ptnRoot; /* current node */
   register int cmp;  /* compare result */
 
   while (ptn)
   {
-    cmp = (*(ptree->pfnTreeCompare))(key, ptn->treekey);
+    pCurrent = (*(ptree->pfnGetFromNodePtr))(ptn);
+    cmp = (*(ptree->pfnTreeCompare))(key, (*(ptree->pfnGetTreeKey))(pCurrent));
     if (cmp == 0)
-      break;  /* found */
+      return pCurrent;  /* found */
     else if (cmp < 0)
     {
       if (ptn->ptnLeft)
 	ptn = ptn->ptnLeft;
       else
-	break;  /* found successor */
+	return pCurrent;  /* found successor */
     }
     else
       ptn = rbtNodeRight(ptn);
   }
-  return ptn;
+  return NULL; /* not found */
 }
 
 /*
@@ -322,9 +326,11 @@ static PRBTREENODE find_min(PRBTREENODE ptn)
  * Returns:
  * Pointer to the leftmost node in the tree. If the tree has no nodes, NULL is returned.
  */
-PRBTREENODE RbtFindMin(PRBTREE ptree)
+PVOID RbtFindMin(PRBTREE ptree)
 {
-  return ptree->ptnRoot ? find_min(ptree->ptnRoot) : NULL;
+  if (ptree->ptnRoot)
+    return (*(ptree->pfnGetFromNodePtr))(find_min(ptree->ptnRoot));
+  return NULL;
 }
 
 /*
@@ -412,7 +418,8 @@ static PRBTREENODE delete_min(PRBTREENODE ptn)
  */
 static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptnCurrent, TREEKEY key)
 {
-  register int cmp = (*(ptree->pfnTreeCompare))(key, ptnCurrent->treekey);
+  register TREEKEY keyCurrent = (*(ptree->pfnGetTreeKey))((*(ptree->pfnGetFromNodePtr))(ptnCurrent));
+  register int cmp = (*(ptree->pfnTreeCompare))(key, keyCurrent);
   if (cmp < 0)
   {
     /* hunt down the left subtree */
@@ -425,7 +432,8 @@ static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptnCurrent, TREE
     if (rbtIsRed(ptnCurrent->ptnLeft))
     {
       ptnCurrent = rotate_right(ptnCurrent);
-      cmp = (*(ptree->pfnTreeCompare))(key, ptnCurrent->treekey);
+      keyCurrent = (*(ptree->pfnGetTreeKey))((*(ptree->pfnGetFromNodePtr))(ptnCurrent));
+      cmp = (*(ptree->pfnTreeCompare))(key, keyCurrent);
     }
     if ((cmp == 0) && !rbtNodeRight(ptnCurrent))
       return ptnCurrent->ptnLeft;  /* degenerate case */
@@ -433,7 +441,8 @@ static PRBTREENODE delete_from_under(PRBTREE ptree, PRBTREENODE ptnCurrent, TREE
 	&& (!rbtNodeRight(ptnCurrent) || !rbtIsRed(rbtNodeRight(ptnCurrent)->ptnLeft)))
     {
       ptnCurrent = move_red_right(ptnCurrent);
-      cmp = (*(ptree->pfnTreeCompare))(key, ptnCurrent->treekey);
+      keyCurrent = (*(ptree->pfnGetTreeKey))((*(ptree->pfnGetFromNodePtr))(ptnCurrent));
+      cmp = (*(ptree->pfnTreeCompare))(key, keyCurrent);
     }
     if (cmp == 0)
     {
@@ -495,7 +504,7 @@ static BOOL do_walk(PRBTREE ptree, PRBTREENODE ptn, PFNRBTWALK pfnWalk, PVOID pD
   if (ptn->ptnLeft)
     rc = do_walk(ptree, ptn->ptnLeft, pfnWalk, pData);
   if (rc)
-    rc = (*pfnWalk)(ptree, ptn, pData);
+    rc = (*pfnWalk)(ptree, (*(ptree->pfnGetFromNodePtr))(ptn), pData);
   if (rc && rbtNodeRight(ptn))
     rc = do_walk(ptree, rbtNodeRight(ptn), pfnWalk, pData);
   return rc;

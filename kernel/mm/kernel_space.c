@@ -177,6 +177,48 @@ static RBTREE g_rbtFreeAddrs;          /* free address tree */
 static PMALLOC g_pMalloc = NULL;       /* allocator we use */
 
 /*
+ * Given a pointer to an ADDRTREENODE, returns its key value (pointer to its interval).
+ *
+ * Parameters:
+ * - patn = Pointer to the ADDRTREENODE.
+ *
+ * Returns:
+ * Pointer to its embedded address interval.
+ */
+static TREEKEY get_interval_from_addrtreenode(PVOID patn)
+{
+  return (TREEKEY)(&(((PADDRTREENODE)patn)->ai));
+}
+
+/*
+ * Given a pointer to an ADDRTREENODE, returns a pointer to its embedded RBTREENODE.
+ *
+ * Parameters:
+ * - patn = Pointer to the ADDRTREENODE.
+ *
+ * Returns:
+ * Pointer to the embedded RBTREENODE.
+ */
+static PRBTREENODE get_rbtreenode_from_addrtreenode(PVOID patn)
+{
+  return &(((PADDRTREENODE)patn)->rbtn);
+}
+
+/*
+ * Given a pointer to a RBTREENODE, returns a pointer to the ADDRTREENODE containing it.
+ *
+ * Parameters:
+ * - ptn = Pointer to the RBTREENODE.
+ *
+ * Returns:
+ * Pointer to the containing ADDRTREENODE.
+ */
+static PVOID get_addrtreenode_from_rbtreenode(PRBTREENODE ptn)
+{
+  return (PVOID)(((PCHAR)ptn) - OFFSETOF(ADDRTREENODE, rbtn));
+}
+
+/*
  * Inserts a kernel address range into the tree.
  *
  * Parameters:
@@ -193,8 +235,9 @@ static void insert_into_tree(KERNADDR kaFirst, KERNADDR kaLast)
 {
   PADDRTREENODE pnode = IMalloc_Alloc(g_pMalloc, sizeof(ADDRTREENODE));
   ASSERT(pnode);
-  rbtNewNode(&(pnode->rbtn), init_interval(&(pnode->ai), kaFirst, kaLast));
-  RbtInsert(&g_rbtFreeAddrs, (PRBTREENODE)pnode);
+  rbtNewNode(&(pnode->rbtn));
+  init_interval(&(pnode->ai), kaFirst, kaLast);
+  RbtInsert(&g_rbtFreeAddrs, pnode);
 }
 
 /*
@@ -288,8 +331,8 @@ void _MmFreeKernelAddr(KERNADDR kaBase, UINT32 cpgToFree)
 
   init_interval_pages(&aiFree, kaBase, cpgToFree);
   ASSERT(!RbtFind(&g_rbtFreeAddrs, (TREEKEY)(&aiFree)));
-  patnPred = (PADDRTREENODE)RbtFindPredecessor(&g_rbtFreeAddrs, (TREEKEY)(&aiFree));
-  patnSucc = (PADDRTREENODE)RbtFindSuccessor(&g_rbtFreeAddrs, (TREEKEY)(&aiFree));
+  patnPred = (PADDRTREENODE)RbtFindPredecessor(&g_rbtFreeAddrs, (&aiFree));
+  patnSucc = (PADDRTREENODE)RbtFindSuccessor(&g_rbtFreeAddrs, (&aiFree));
   if (patnPred && intervals_adjacent(&(patnPred->ai), &aiFree))
   {
     if (patnSucc && intervals_adjacent(&aiFree, &(patnSucc->ai)))
@@ -321,7 +364,8 @@ SEG_INIT_CODE void _MmInitKernelSpace(PSTARTUP_INFO pstartup, PMALLOC pmInitHeap
 {
   g_pMalloc = pmInitHeap;
   IUnknown_AddRef(g_pMalloc);
-  rbtInitTree(&g_rbtFreeAddrs, (PFNTREECOMPARE)interval_compare);
+  rbtInitTree(&g_rbtFreeAddrs, (PFNTREECOMPARE)interval_compare, get_interval_from_addrtreenode,
+	      get_rbtreenode_from_addrtreenode, get_addrtreenode_from_rbtreenode);
   insert_into_tree(pstartup->vmaFirstFree, VMADDR_IO_BASE);
   insert_into_tree(VMADDR_IO_BASE + (PAGE_COUNT_IO * SYS_PAGE_SIZE), VMADDR_KERNEL_NOMANS);
 }
