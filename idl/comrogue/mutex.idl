@@ -29,43 +29,30 @@
  *
  * "Raspberry Pi" is a trademark of the Raspberry Pi Foundation.
  */
-#ifndef __HEAP_H_INCLUDED
-#define __HEAP_H_INCLUDED
+import "comrogue/objectbase.idl";
 
-#ifndef __ASM__
-
-#include <comrogue/compiler_macros.h>
-#include <comrogue/types.h>
-#include <comrogue/scode.h>
-#include <comrogue/allocator.h>
-#include <comrogue/mutex.h>
-
-/*------------------------------------------------------------------------------------
- * The raw heap data used to hold the heap internals.  It's defined as opaque memory.
- *------------------------------------------------------------------------------------
+/*------------------
+ * IMutex interface
+ *------------------
  */
 
-typedef struct tagRAWHEAPDATA
+[object, uuid(ace3dd2d-3623-4a0d-b004-6de350c3d5a9), pointer_default(unique)]
+interface IMutex: IUnknown
 {
-  UINT32 opaque[32];             /* opaque data, do not modify */
-} RAWHEAPDATA, *PRAWHEAPDATA;
+  [unique] typedef IMutex *PMUTEX;
+  HRESULT Lock(void);
+  HRESULT TryLock(void);
+  HRESULT Unlock(void);
+}
 
-typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA prhd); /* function that optionally frees the heap data */
-
-/*--------------------
- * External functions
- *--------------------
+/*-------------------------
+ * IMutexFactory interface
+ *-------------------------
  */
 
-#define STD_CHUNK_BITS  22     /* standard number of bits in a memory chunk - yields 4Mb chunks */
-
-CDECL_BEGIN
-
-extern HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocator *pChunkAllocator,
-			  IMutexFactory *pMutexFactory, UINT32 nChunkBits, IMalloc **ppHeap);
-
-CDECL_END
-
-#endif /* __ASM__ */
-
-#endif /* __HEAP_H_INCLUDED */
+[object, uuid(b85c7fb6-6878-431c-9d90-e05bff3a5142), pointer_default(unique)]
+interface IMutexFactory: IUnknown
+{
+  [unique] typedef IMutexFactory *PMUTEXFACTORY;
+  HRESULT CreateMutex([out] IMutex **ppmtx);
+}

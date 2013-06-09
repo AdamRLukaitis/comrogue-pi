@@ -181,5 +181,6 @@
 #define MEMMGR_E_RECURSED            SCODE_CAST(0x86010007)    /* tried to recurse into page allocation */
 #define MEMMGR_E_BADTAGS             SCODE_CAST(0x86010008)    /* invalid tags for freed page */
 #define MEMMGR_E_BADHEAPDATASIZE     SCODE_CAST(0x86010009)    /* bad size of raw heap data block */
+#define MEMMGR_E_BADCHUNKSIZE        SCODE_CAST(0x8601000A)    /* bad chunk size for heap */
 
 #endif /* __SCODE_H_INCLUDED */

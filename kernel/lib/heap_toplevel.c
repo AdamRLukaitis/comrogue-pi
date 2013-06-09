@@ -34,12 +34,14 @@
  */
 #include <comrogue/compiler_macros.h>
 #include <comrogue/types.h>
+#include <comrogue/scode.h>
 #include <comrogue/str.h>
 #include <comrogue/objhelp.h>
 #include <comrogue/stdobj.h>
 #include <comrogue/allocator.h>
 #include <comrogue/heap.h>
 #include <comrogue/internals/seg.h>
+#include <comrogue/internals/mmu.h>
 #include "heap_internals.h"
 #include "enumgeneric.h"
 
@@ -94,6 +96,23 @@ static UINT32 malloc_AddRef(IUnknown *pThis)
 }
 
 /*
+ * Shuts down everything that was allocated at top level.
+ *
+ * Parameters:
+ * - phd = Pointer to HEAPDATA structure.
+ *
+ * Returns:
+ * Nothing.
+ */
+static void toplevel_shutdown(PHEAPDATA phd)
+{
+    ObjHlpFixedCpTeardown(&(phd->fcpMallocSpy));
+    ObjHlpFixedCpTeardown(&(phd->fcpSequentialStream));
+    IUnknown_Release(phd->pMutexFactory);
+    IUnknown_Release(phd->pChunkAllocator);
+}
+
+/*
  * Removes a reference from the heap data object.  The object is freed when its reference count reaches 0.
  *
  * Parameters:
@@ -112,9 +131,8 @@ static UINT32 malloc_Release(IUnknown *pThis)
   if ((rc == 0) && !(phd->uiFlags & PHDFLAGS_DELETING))
   {
     phd->uiFlags |= PHDFLAGS_DELETING;
-    ObjHlpFixedCpTeardown(&(phd->fcpMallocSpy));
-    ObjHlpFixedCpTeardown(&(phd->fcpSequentialStream));
-    IUnknown_Release(phd->pChunkAllocator);
+    _HeapBaseShutdown(phd);
+    toplevel_shutdown(phd);
     if (phd->pfnFreeRawHeapData)
     {
       pfnFree = phd->pfnFreeRawHeapData;
@@ -137,6 +155,9 @@ static PVOID malloc_Alloc(IMalloc *pThis, SIZE_T cb)
     if ((cbActual == 0) && (cb != 0))
       return NULL;  /* simulated memory failure */
   }
+
+  if (cbActual == 0)
+    cbActual = 1;  /* allocate at least SOMETHING */
 
   rc = NULL; /* TODO */
 
@@ -183,6 +204,9 @@ static void malloc_Free(IMalloc *pThis, PVOID pv)
   PHEAPDATA phd = (PHEAPDATA)pThis;  /* pointer to heap data */
   PVOID pvActual = pv;               /* actual heap block pointer */
   BOOL fSpyed;                       /* were we allocated while currently spyed on? */
+
+  if (!pv)
+    return;  /* no effect if pointer is NULL */
 
   /* handle PreFree call */
   if (phd->pMallocSpy)
@@ -431,15 +455,18 @@ static const SEG_RODATA struct IConnectionPointContainerVTable vtblConnectionPoi
  *             "prhd" block.  May be NULL.
  * - pChunkAllocator = Pointer to the IChunkAllocator interface used by the heap to allocate chunks of memory
  *                     for carving up by the heap.
+ * - pMutexFactory = Pointer to the IMutexFactory interface used to allocate IMutex objects.
+ * - nChunkBits = Number of "bits" in a memory chunk that gets allocated.
  * - ppHeap = Pointer location that will receive a pointer to the heap's IMalloc interface.
  *
  * Returns:
  * Standard HRESULT success/failure.
  */
 HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocator *pChunkAllocator,
-		   IMalloc **ppHeap)
+		   IMutexFactory *pMutexFactory, UINT32 nChunkBits, IMalloc **ppHeap)
 {
   PHEAPDATA phd;   /* pointer to actual heap data */
+  HRESULT hr;      /* HRESULT of intermediate operations */
 
   if (sizeof(RAWHEAPDATA) < sizeof(HEAPDATA))
     return MEMMGR_E_BADHEAPDATASIZE;  /* bogus size of raw heap data */
@@ -454,12 +481,37 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocato
   phd->uiRefCount = 1;
   phd->uiFlags = 0;
   phd->pfnFreeRawHeapData = pfnFree;
+  phd->nChunkBits = nChunkBits;
+  phd->szChunk = 1 << nChunkBits;
+  if (phd->szChunk < SYS_PAGE_SIZE)
+    return MEMMGR_E_BADCHUNKSIZE;
+  phd->uiChunkSizeMask = phd->szChunk - 1;
+  phd->cpgChunk = phd->szChunk >> SYS_PAGE_BITS;
+
+  /* Set up the top-level data. */
   phd->pChunkAllocator = pChunkAllocator;
   IUnknown_AddRef(phd->pChunkAllocator);
+  phd->pMutexFactory = pMutexFactory;
+  IUnknown_AddRef(phd->pMutexFactory);
   ObjHlpFixedCpSetup(&(phd->fcpMallocSpy), (PUNKNOWN)phd, &IID_IMallocSpy, (IUnknown **)(&(phd->pMallocSpy)), 1, NULL);
   ObjHlpFixedCpSetup(&(phd->fcpSequentialStream), (PUNKNOWN)phd, &IID_ISequentialStream,
 		     (IUnknown **)(&(phd->pDebugStream)), 1, NULL);
 
+  /* Setup base pointers. */
+  hr = _HeapBaseSetup(phd);
+  if (FAILED(hr))
+    goto error0;
+
+
+
+
   *ppHeap = (IMalloc *)phd;
   return S_OK;
+
+  /*error1:*/
+  _HeapBaseShutdown(phd);
+error0:
+  toplevel_shutdown(phd);
+  *ppHeap = NULL;
+  return hr;
 }

@@ -39,11 +39,32 @@
 
 #ifndef __ASM__
 
+#include <comrogue/compiler_macros.h>
+#include <comrogue/types.h>
 #include <comrogue/objectbase.h>
 #include <comrogue/connpoint.h>
 #include <comrogue/allocator.h>
+#include <comrogue/mutex.h>
 #include <comrogue/heap.h>
 #include <comrogue/objhelp.h>
+#include <comrogue/internals/rbtree.h>
+
+/*-------------------
+ * Extent management
+ *-------------------
+ */
+
+/* Tree of extents managed by the heap management code. */
+typedef struct tagEXTENT_NODE
+{
+  RBTREENODE rbtnSizeAddress;    /* tree node for size and address ordering */
+  RBTREENODE rbtnAddress;        /* tree node for address ordering */
+  /* TODO prof_ctx? */
+  PVOID pv;                      /* base pointer to region */
+  SIZE_T sz;                     /* size of region */
+  BOOL fZeroed;                  /* is this extent zeroed? */
+} EXTENT_NODE, *PEXTENT_NODE;
+typedef PEXTENT_NODE *PPEXTENT_NODE;
 
 /*----------------------------------
  * The actual heap data declaration
@@ -57,11 +78,58 @@ typedef struct tagHEAPDATA {
   UINT32 uiFlags;                                  /* flags word */
   PFNRAWHEAPDATAFREE pfnFreeRawHeapData;           /* pointer to function that frees the raw heap data, if any */
   IChunkAllocator *pChunkAllocator;                /* chunk allocator pointer */
+  IMutexFactory *pMutexFactory;                    /* mutex factory pointer */
   FIXEDCPDATA fcpMallocSpy;                        /* connection point for IMallocSpy */
   FIXEDCPDATA fcpSequentialStream;                 /* connection point for ISequentialStream for debugging */
   IMallocSpy *pMallocSpy;                          /* IMallocSpy interface for the allocator */
   ISequentialStream *pDebugStream;                 /* debugging output stream */
+  UINT32 nChunkBits;                               /* number of bits in a chunk */
+  UINT32 szChunk;                                  /* size of a chunk */
+  UINT32 uiChunkSizeMask;                          /* bitmask for a chunk */
+  UINT32 cpgChunk;                                 /* number of pages in a chunk */
+  RBTREE rbtExtSizeAddr;                           /* tree ordering extents by size and address */
+  RBTREE rbtExtAddr;                               /* tree ordering extents by address */
+  IMutex *pmtxBase;                                /* base mutex */
+  PVOID pvBasePages;                               /* pages being used for internal memory allocation */
+  PVOID pvBaseNext;                                /* next allocation location */
+  PVOID pvBasePast;                                /* address immediately past pvBasePages */
+  PEXTENT_NODE pexnBaseNodes;                      /* pointer to base nodes */
 } HEAPDATA, *PHEAPDATA;
+
+/*-------------------------------------
+ * Internal chunk management functions
+ *-------------------------------------
+ */
+
+/* Get chunk address for allocated address a. */
+#define CHUNK_ADDR2BASE(phd, a)   ((PVOID)(((UINT_PTR)(a)) & ~((phd)->uiChunkSizeMask)))
+
+/* Get chunk offset of allocated address a. */
+#define CHUNK_ADDR2OFFSET(phd, a) ((SIZE_T)(((UINT_PTR)(a)) & (phd)->uiChunkSizeMask))
+
+/* Return the smallest chunk size multiple that can contain a certain size. */
+#define CHUNK_CEILING(phd, sz)    (((sz) + (phd)->uiChunkSizeMask) & ~((phd)->uiChunkSizeMask))
+
+extern PVOID _HeapChunkAlloc(PHEAPDATA phd, SIZE_T sz, SIZE_T szAlignment, BOOL fBase, BOOL *pfZeroed);
+extern void _HeapChunkUnmap(PHEAPDATA phd, PVOID pvChunk, SIZE_T sz);
+extern void _HeapChunkDeAlloc(PHEAPDATA phd, PVOID pvChunk, SIZE_T sz, BOOL fUnmap);
+extern HRESULT _HeapChunkSetup(PHEAPDATA phd);
+extern void _HeapChunkShutdown(PHEAPDATA phd);
+
+/*------------------------------------
+ * Internal base management functions
+ *------------------------------------
+ */
+
+CDECL_BEGIN
+
+extern PVOID _HeapBaseAlloc(PHEAPDATA phd, SIZE_T sz);
+extern PEXTENT_NODE _HeapBaseNodeAlloc(PHEAPDATA phd);
+extern void _HeapBaseNodeDeAlloc(PHEAPDATA phd, PEXTENT_NODE pexn);
+extern HRESULT _HeapBaseSetup(PHEAPDATA phd);
+extern void _HeapBaseShutdown(PHEAPDATA phd);
+
+CDECL_END
 
 #endif /* __ASM__ */
 

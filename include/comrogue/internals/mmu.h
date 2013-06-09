@@ -53,6 +53,13 @@
 #define SYS_PGTBL_SIZE      1024          /* page tables must be located on this boundary and are this size */
 #define SYS_PGTBL_BITS      8             /* log2(SYS_PGTBL_SIZE/4), number of bits in a page table address */
 #define SYS_PGTBL_ENTRIES   256           /* SYS_PGTBL_SIZE/4, number of entries in a page table */
+#define SYS_CACHELINE_SIZE  64            /* width of a cache line in bytes */
+#define SYS_CACHELINE_BITS  6             /* log2(SYS_CACHELINE_SIZE), number of bits in a cache line */
+
+#define SYS_PAGE_MASK       (SYS_PAGE_SIZE - 1)
+#define SYS_CACHELINE_MASK  (SYS_CACHELINE_SIZE - 1)
+
+#define SYS_CACHELINE_CEILING(sz) (((sz) + SYS_CACHELINE_MASK) & ~SYS_CACHELINE_MASK)
 
 /* Section descriptor bits */
 #define TTBSEC_PXN          0x00000001    /* Privileged Execute-Never */

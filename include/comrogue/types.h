@@ -89,8 +89,8 @@ typedef unsigned short wchar_t;
 #ifdef __COMROGUE_INTERNALS__
 
 /* Internal system types */
-typedef UINT32 PHYSADDR;      /* physical address */
-typedef UINT32 KERNADDR;      /* kernel address */
+typedef UINT_PTR PHYSADDR;      /* physical address */
+typedef UINT_PTR KERNADDR;      /* kernel address */
 typedef PHYSADDR *PPHYSADDR;
 typedef KERNADDR *PKERNADDR;
 
