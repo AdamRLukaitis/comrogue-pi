@@ -86,3 +86,16 @@ interface IChunkAllocator: IUnknown
   HRESULT FreeChunk([in] PVOID pvChunk, [in] UINT32 cbChunk);
   HRESULT PurgeUnusedRegion([in] PVOID pvRegion, [in] UINT32 cbRegion);
 }
+
+/*------------------------------
+ * IHeapConfiguration interface
+ *------------------------------
+ */
+
+[object, uuid(c867272d-6a5d-4e43-9377-ddc65f82c0e1), pointer_default(unique)]
+interface IHeapConfiguration: IUnknown
+{
+  [unique] typedef IHeapConfiguration *PHEAPCONFIGURATION;
+  HRESULT GetActiveDirtyRatio([out] SSIZE_T *pcbRatio);
+  HRESULT SetActiveDirtyRatio([in] SSIZE_T cbRatio);
+}

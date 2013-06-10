@@ -251,6 +251,7 @@ struct tagARENA
 typedef struct tagHEAPDATA {
   IMalloc mallocInterface;                         /* pointer to IMalloc interface - MUST BE FIRST! */
   IConnectionPointContainer cpContainerInterface;  /* pointer to IConnectionPointContainer interface */
+  IHeapConfiguration heapConfInterface;            /* pointer to IHeapConfiguration interface */
   UINT32 uiRefCount;                               /* reference count */
   UINT32 uiFlags;                                  /* flags word */
   PFNRAWHEAPDATAFREE pfnFreeRawHeapData;           /* pointer to function that frees the raw heap data, if any */
@@ -266,6 +267,7 @@ typedef struct tagHEAPDATA {
   UINT32 szChunk;                                  /* size of a chunk */
   UINT32 uiChunkSizeMask;                          /* bitmask for a chunk */
   UINT32 cpgChunk;                                 /* number of pages in a chunk */
+  SSIZE_T cbActiveDirtyRatio;                      /* active/dirty ratio parameter */
   IMutex *pmtxChunks;                              /* chunks mutex */
   RBTREE rbtExtSizeAddr;                           /* tree ordering extents by size and address */
   RBTREE rbtExtAddr;                               /* tree ordering extents by address */

@@ -75,6 +75,8 @@ static HRESULT malloc_QueryInterface(IUnknown *pThis, REFIID riid, PPVOID ppvObj
     *ppvObject = pThis;
   else if (IsEqualIID(riid, &IID_IConnectionPointContainer))
     *ppvObject = &(((PHEAPDATA)pThis)->cpContainerInterface);
+  else if (IsEqualIID(riid, &IID_IHeapConfiguration))
+    *ppvObject = &(((PHEAPDATA)pThis)->heapConfInterface);
   else
     return E_NOINTERFACE;
   IUnknown_AddRef((IUnknown *)(*ppvObject));
@@ -442,10 +444,120 @@ static const SEG_RODATA struct IConnectionPointContainerVTable vtblConnectionPoi
   .FindConnectionPoint = cpc_FindConnectionPoint
 };
 
+/*-----------------------------------
+ * IHeapConfiguration implementation
+ *-----------------------------------
+ */
+
+/* Quick macro to get the PHEAPDATA from the IHeapConfiguration pointer */
+#undef HeapDataPtr
+#define HeapDataPtr(pcpc)    (((PBYTE)(pcpc)) - OFFSETOF(HEAPDATA, heapConfInterface))
+
+/*
+ * Queries for an interface on the heap object.
+ *
+ * Parameters:
+ * - pThis = Pointer to the HeapConfiguration interface in the heap data object.
+ * - riid = Reference to the IID of the interface we want to load.
+ * - ppvObject = Pointer to the location to receive the new interface pointer.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator:
+ * - S_OK = New interface pointer was returned.
+ * - E_NOINTERFACE = The object does not support this interface.
+ * - E_POINTER = The ppvObject pointer is not valid.
+ */
+static HRESULT heapconf_QueryInterface(IUnknown *pThis, REFIID riid, PPVOID ppvObject)
+{
+  return malloc_QueryInterface((IUnknown *)HeapDataPtr(pThis), riid, ppvObject);
+}
+
+/*
+ * Adds a reference to the heap data object.
+ *
+ * Parameters:
+ * - pThis = Pointer to the HeapConfiguration interface in the heap data object.
+ *
+ * Returns:
+ * The new reference count on the object.
+ */
+static UINT32 heapconf_AddRef(IUnknown *pThis)
+{
+  return malloc_AddRef((IUnknown *)HeapDataPtr(pThis));
+}
+
+/*
+ * Removes a reference from the heap data object.  The object is freed when its reference count reaches 0.
+ *
+ * Parameters:
+ * - pThis = Pointer to the HeapConfiguration interface in the heap data object.
+ *
+ * Returns:
+ * The new reference count on the object.
+ */
+static UINT32 heapconf_Release(IUnknown *pThis)
+{
+  return malloc_Release((IUnknown *)HeapDataPtr(pThis));
+}
+
+/*
+ * Retrieves the current ratio of active to dirty pages in the heap, expressed as a base-2 logarithm value.
+ * A value of -1 disables dirty page purging.
+ *
+ * Parameters:
+ * - pThis = Pointer to the HeapConfiguration interface in the heap data object.
+ * - pcbRatio = Pointer to location to receive the current ratio value.
+ *
+ * Returns:
+ * - S_OK = Retrieved the value successfully.
+ * - E_POINTER = Invalid pointer for the pcbRatio object.
+ */
+static HRESULT heapconf_GetActiveDirtyRatio(IHeapConfiguration *pThis, SSIZE_T *pcbRatio)
+{
+  PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
+  if (!pcbRatio)
+    return E_POINTER;
+  *pcbRatio = phd->cbActiveDirtyRatio;
+  return S_OK;
+}
+
+/*
+ * Sets the current ratio of active to dirty pages in the heap, expressed as a base-2 logarithm value.
+ * A value of -1 disables dirty page purging.
+ *
+ * Parameters:
+ * - pThis = Pointer to the HeapConfiguration interface in the heap data object.
+ * - cbRatio = The new ratio value.
+ *
+ * Returns:
+ * - S_OK = Set the value successfully.
+ * - E_INVALIDARG = Invalid value for the ratio object.
+ */
+static HRESULT heapconf_SetActiveDirtyRatio(IHeapConfiguration *pThis, SSIZE_T cbRatio)
+{
+  PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
+  if ((cbRatio < -1) || (cbRatio > ((sizeof(SIZE_T) << 3) - 1)))
+    return E_INVALIDARG;
+  phd->cbActiveDirtyRatio = cbRatio;
+  return S_OK;
+}
+
+/* The IHeapConfiguration vtable. */
+static const SEG_RODATA struct IHeapConfigurationVTable vtblHeapConfiguration =
+{
+  .QueryInterface = heapconf_QueryInterface,
+  .AddRef = heapconf_AddRef,
+  .Release = heapconf_Release,
+  .GetActiveDirtyRatio = heapconf_GetActiveDirtyRatio,
+  .SetActiveDirtyRatio = heapconf_SetActiveDirtyRatio
+};
+
 /*------------------------
  * Heap creation function
  *------------------------
  */
+
+#define DEFAULT_CBACTIVEDIRTYRATIO 3
 
 /*
  * Creates a heap implementation and returns a pointer to its IMalloc interface.
@@ -483,6 +595,7 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT p
   StrSetMem(phd, 0, sizeof(HEAPDATA));
   phd->mallocInterface.pVTable = &vtblMalloc;
   phd->cpContainerInterface.pVTable = &vtblConnectionPointContainer;
+  phd->heapConfInterface.pVTable = &vtblHeapConfiguration;
   phd->uiRefCount = 1;
   phd->uiFlags = 0;
   phd->pfnFreeRawHeapData = pfnFree;
@@ -494,6 +607,7 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT p
     return MEMMGR_E_BADCHUNKSIZE;
   phd->uiChunkSizeMask = phd->szChunk - 1;
   phd->cpgChunk = phd->szChunk >> SYS_PAGE_BITS;
+  phd->cbActiveDirtyRatio = DEFAULT_CBACTIVEDIRTYRATIO;
 
   /* Set up the top-level data. */
   phd->pChunkAllocator = pChunkAllocator;
