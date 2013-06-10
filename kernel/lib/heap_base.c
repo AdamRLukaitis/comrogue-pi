@@ -41,23 +41,53 @@
 #include <comrogue/internals/mmu.h>
 #include "heap_internals.h"
 
+/*-----------------------------------
+ * Base memory allocation functions.
+ *-----------------------------------
+ */
+
+/*
+ * Allocate a new chunk of memory for use by the base allocator, and point to it with the allocator pointers.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - szMinimum = Minimum number of bytes we need to allocate.
+ *
+ * Returns:
+ * - TRUE = Allocation failed.
+ * - FALSE = Allocation succeeded.
+ */
 static BOOL base_alloc_new_chunk(PHEAPDATA phd, SIZE_T szMinimum)
 {
-  BOOL fZero = FALSE;  /* do we need this zeroed? (no) */
   SIZE_T szAdjusted;   /* adjusted size to multiple of chunk size */
   PVOID pvNewChunk;    /* pointer to new chunk */
+  PVOID pvTemp;        /* temporary pointer */
+  BOOL fZero = FALSE;  /* do we need this zeroed? (no) */
 
   szAdjusted = CHUNK_CEILING(phd, szMinimum);
   pvNewChunk = _HeapChunkAlloc(phd, szAdjusted, phd->szChunk, TRUE, &fZero);
   if (!pvNewChunk)
     return TRUE;  /* allocation failed */
   *((PPVOID)pvNewChunk) = phd->pvBasePages;
+  pvTemp = (PVOID)(((UINT_PTR)pvNewChunk) + sizeof(PVOID));
+  *((SIZE_T *)pvTemp) = szAdjusted;
   phd->pvBasePages = pvNewChunk;
-  phd->pvBaseNext = (PVOID)(((UINT_PTR)pvNewChunk) + sizeof(PVOID));
+  phd->pvBaseNext = (PVOID)(((UINT_PTR)pvNewChunk) + sizeof(PVOID) + sizeof(SIZE_T));
   phd->pvBasePast = (PVOID)(((UINT_PTR)pvNewChunk) + szAdjusted);
   return FALSE;
 }
 
+/*
+ * Allocate a chunk of memory from the base allocator.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - sz = Number of bytes to allocate.
+ *
+ * Returns:
+ * - NULL = Allocation failed.
+ * - Other = Pointer to the allocated block of memory.
+ */
 PVOID _HeapBaseAlloc(PHEAPDATA phd, SIZE_T sz)
 {
   PVOID rc = NULL;      /* return from this function */
@@ -68,8 +98,8 @@ PVOID _HeapBaseAlloc(PHEAPDATA phd, SIZE_T sz)
   IMutex_Lock(phd->pmtxBase);
   if (((UINT_PTR)(phd->pvBaseNext) + szAdjusted) > (UINT_PTR)(phd->pvBasePast))
   { /* allocate new chunk if we don't have enough space for the allocation */
-    if (base_alloc_new_chunk(phd, szAdjusted + sizeof(PVOID)))
-      goto error0;
+    if (base_alloc_new_chunk(phd, szAdjusted + sizeof(PVOID) + sizeof(SIZE_T)))
+      goto error0;  /* failed */
   }
 
   rc = phd->pvBaseNext;  /* perform the allocation */
@@ -80,6 +110,16 @@ error0:
   return rc;
 }
 
+/*
+ * Allocate a new EXTENT_NODE from the base allocator.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ *
+ * Returns:
+ * - NULL = Allocation failed.
+ * - Other = Pointer to the new EXTENT_NODE.
+ */
 PEXTENT_NODE _HeapBaseNodeAlloc(PHEAPDATA phd)
 {
   PEXTENT_NODE rc = NULL;  /* return from this function */
@@ -97,6 +137,16 @@ PEXTENT_NODE _HeapBaseNodeAlloc(PHEAPDATA phd)
   return rc;
 }
 
+/*
+ * Returns an EXTENT_NODE to the free list.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pexn = Pointer to the EXTENT_NODE to be freed.
+ *
+ * Returns:
+ * Nothing.
+ */
 void _HeapBaseNodeDeAlloc(PHEAPDATA phd, PEXTENT_NODE pexn)
 {
   /* add it to the free list */
@@ -106,6 +156,15 @@ void _HeapBaseNodeDeAlloc(PHEAPDATA phd, PEXTENT_NODE pexn)
   IMutex_Unlock(phd->pmtxBase);
 }
 
+/*
+ * Set up the base allocator.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator.
+ */
 HRESULT _HeapBaseSetup(PHEAPDATA phd)
 {
   HRESULT hr = IMutexFactory_CreateMutex(phd->pMutexFactory, &(phd->pmtxBase));
@@ -115,8 +174,32 @@ HRESULT _HeapBaseSetup(PHEAPDATA phd)
   return S_OK;
 }
 
+/*
+ * Shut down the base allocator.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ *
+ * Returns:
+ * Nothing.
+ */
 void _HeapBaseShutdown(PHEAPDATA phd)
 {
-  /* TODO */
+  PVOID pChunk;      /* the chunk we're working on */
+  PVOID pNextChunk;  /* the next chunk to be dealt with */
+  PVOID pvTemp;      /* temporary pointer */
+  SIZE_T szChunk;    /* size of allocated chunk */
+
+  /* All allocated "base" chunks come straight from the IChunkAllocator, so it's safe to free them this way. */
+  pChunk = phd->pvBasePages;
+  while (pChunk)
+  {
+    pNextChunk = *((PPVOID)pChunk);
+    pvTemp = (PVOID)(((UINT_PTR)pChunk) + sizeof(PVOID));
+    szChunk = *((SIZE_T *)pvTemp);
+    IChunkAllocator_FreeChunk(phd->pChunkAllocator, pChunk, szChunk);
+    pChunk = pNextChunk;
+  }
+
   IUnknown_Release(phd->pmtxBase);
 }

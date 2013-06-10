@@ -39,15 +39,33 @@
 
 #ifndef __ASM__
 
+#include <stdarg.h>
 #include <comrogue/compiler_macros.h>
 #include <comrogue/types.h>
 #include <comrogue/objectbase.h>
 #include <comrogue/connpoint.h>
 #include <comrogue/allocator.h>
+#include <comrogue/stream.h>
 #include <comrogue/mutex.h>
 #include <comrogue/heap.h>
 #include <comrogue/objhelp.h>
 #include <comrogue/internals/rbtree.h>
+#include <comrogue/internals/seg.h>
+
+/*--------------------------------------------------------------
+ * Radix tree implementation for keeping track of memory chunks
+ *--------------------------------------------------------------
+ */
+
+#define RTREE_NODESIZE  (1U << 14)   /* node size for tree */
+
+typedef struct tagMEMRTREE
+{
+  IMutex *pmtx;             /* mutex for tree */
+  PPVOID ppRoot;            /* tree root */
+  UINT32 uiHeight;          /* tree height */
+  UINT32 auiLevel2Bits[0];  /* bits at level 2 - dynamically sized */
+} MEMRTREE, *PMEMRTREE;
 
 /*-------------------
  * Extent management
@@ -77,6 +95,8 @@ typedef struct tagHEAPDATA {
   UINT32 uiRefCount;                               /* reference count */
   UINT32 uiFlags;                                  /* flags word */
   PFNRAWHEAPDATAFREE pfnFreeRawHeapData;           /* pointer to function that frees the raw heap data, if any */
+  PFNHEAPABORT pfnAbort;                           /* pointer to abort function */
+  PVOID pvAbortArg;                                /* argument to abort function */
   IChunkAllocator *pChunkAllocator;                /* chunk allocator pointer */
   IMutexFactory *pMutexFactory;                    /* mutex factory pointer */
   FIXEDCPDATA fcpMallocSpy;                        /* connection point for IMallocSpy */
@@ -87,8 +107,10 @@ typedef struct tagHEAPDATA {
   UINT32 szChunk;                                  /* size of a chunk */
   UINT32 uiChunkSizeMask;                          /* bitmask for a chunk */
   UINT32 cpgChunk;                                 /* number of pages in a chunk */
+  IMutex *pmtxChunks;                              /* chunks mutex */
   RBTREE rbtExtSizeAddr;                           /* tree ordering extents by size and address */
   RBTREE rbtExtAddr;                               /* tree ordering extents by address */
+  PMEMRTREE prtChunks;                             /* radix tree containing all chunk values */
   IMutex *pmtxBase;                                /* base mutex */
   PVOID pvBasePages;                               /* pages being used for internal memory allocation */
   PVOID pvBaseNext;                                /* next allocation location */
@@ -96,25 +118,72 @@ typedef struct tagHEAPDATA {
   PEXTENT_NODE pexnBaseNodes;                      /* pointer to base nodes */
 } HEAPDATA, *PHEAPDATA;
 
+/*---------------------------------
+ * Utility and debugging functions
+ *---------------------------------
+ */
+
+/* Get nearest aligned address at or below a. */
+#define ALIGNMENT_ADDR2BASE(a, alignment)  ((PVOID)(((UINT_PTR)(a)) & ~(alignment)))
+
+/* Get offset between a and ALIGNMENT_ADDR2BASE(a, alignment). */
+#define ALIGNMENT_ADDR2OFFSET(a, alignment) ((SIZE_T)(((UINT_PTR)(a)) & (alignment)))
+
+/* Returns the smallest alignment multiple greater than sz. */
+#define ALIGNMENT_CEILING(sz, alignment)    (((sz) + (alignment)) & ~(alignment))
+
+CDECL_BEGIN
+
+extern void _HeapDbgWrite(PHEAPDATA phd, PCSTR sz);
+extern void _HeapPrintf(PHEAPDATA phd, PCSTR szFormat, ...);
+extern void _HeapAssertFailed(PHEAPDATA phd, PCSTR szFile, INT32 nLine);
+extern SIZE_T _HeapPow2Ceiling(SIZE_T x);
+
+CDECL_END
+
+#define _H_THIS_FILE  __FILE__
+#define _DECLARE_H_THIS_FILE static const char SEG_RODATA _H_THIS_FILE[] = __FILE__;
+
+#define _H_ASSERT(phd, expr)  ((expr) ? (void)0 : _HeapAssertFailed(phd, _H_THIS_FILE, __LINE__))
+
+/*---------------------------------
+ * Radix tree management functions
+ *---------------------------------
+ */
+
+CDECL_BEGIN
+
+extern PMEMRTREE _HeapRTreeNew(PHEAPDATA phd, UINT32 cBits);
+extern void _HeapRTreeDestroy(PMEMRTREE prt);
+extern PVOID _HeapRTreeGetLocked(PHEAPDATA phd, PMEMRTREE prt, UINT_PTR uiKey);
+extern PVOID _HeapRTreeGet(PHEAPDATA phd, PMEMRTREE prt, UINT_PTR uiKey);
+extern BOOL _HeapRTreeSet(PHEAPDATA phd, PMEMRTREE prt, UINT_PTR uiKey, PVOID pv);
+
+CDECL_END
+
 /*-------------------------------------
  * Internal chunk management functions
  *-------------------------------------
  */
 
 /* Get chunk address for allocated address a. */
-#define CHUNK_ADDR2BASE(phd, a)   ((PVOID)(((UINT_PTR)(a)) & ~((phd)->uiChunkSizeMask)))
+#define CHUNK_ADDR2BASE(phd, a)             ALIGNMENT_ADDR2BASE((a), (phd)->uiChunkSizeMask)
 
 /* Get chunk offset of allocated address a. */
-#define CHUNK_ADDR2OFFSET(phd, a) ((SIZE_T)(((UINT_PTR)(a)) & (phd)->uiChunkSizeMask))
+#define CHUNK_ADDR2OFFSET(phd, a)           ALIGNMENT_ADDR2OFFSET((a), (phd)->uiChunkSizeMask)
 
 /* Return the smallest chunk size multiple that can contain a certain size. */
-#define CHUNK_CEILING(phd, sz)    (((sz) + (phd)->uiChunkSizeMask) & ~((phd)->uiChunkSizeMask))
+#define CHUNK_CEILING(phd, sz)              ALIGNMENT_CEILING((sz), (phd)->uiChunkSizeMask)
+
+CDECL_BEGIN
 
 extern PVOID _HeapChunkAlloc(PHEAPDATA phd, SIZE_T sz, SIZE_T szAlignment, BOOL fBase, BOOL *pfZeroed);
 extern void _HeapChunkUnmap(PHEAPDATA phd, PVOID pvChunk, SIZE_T sz);
 extern void _HeapChunkDeAlloc(PHEAPDATA phd, PVOID pvChunk, SIZE_T sz, BOOL fUnmap);
 extern HRESULT _HeapChunkSetup(PHEAPDATA phd);
 extern void _HeapChunkShutdown(PHEAPDATA phd);
+
+CDECL_END
 
 /*------------------------------------
  * Internal base management functions

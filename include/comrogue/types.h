@@ -59,6 +59,10 @@
 #define INT64_BITS  64
 #define UINT64_BITS 64
 
+#define LOG_PTRSIZE     2   /* log2(sizeof(void *)) */
+#define LOG_INTSIZE     2   /* log2(sizeof(int)) */
+#define LOG_INT64SIZE   3   /* log2(sizeof(long long)) */
+
 /* Boolean values */
 #define TRUE  1
 #define FALSE 0

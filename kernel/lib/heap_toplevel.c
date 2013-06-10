@@ -131,10 +131,12 @@ static UINT32 malloc_Release(IUnknown *pThis)
   if ((rc == 0) && !(phd->uiFlags & PHDFLAGS_DELETING))
   {
     phd->uiFlags |= PHDFLAGS_DELETING;
+    /* Do subsystem shutdown. */
+    _HeapChunkShutdown(phd);
     _HeapBaseShutdown(phd);
     toplevel_shutdown(phd);
     if (phd->pfnFreeRawHeapData)
-    {
+    { /* free the raw heap data */
       pfnFree = phd->pfnFreeRawHeapData;
       (*pfnFree)((PRAWHEAPDATA)phd);
     }
@@ -453,6 +455,8 @@ static const SEG_RODATA struct IConnectionPointContainerVTable vtblConnectionPoi
  *          for the heap.
  * - pfnFree = Pointer to a function called as the last stage of releasing the heap, which frees the
  *             "prhd" block.  May be NULL.
+ * - pfnAbort = Pointer to a function called when there's a serious error in the heap.  May be NULL.
+ * - pvAbortArg = Argument passed to the pfnAbort function when it's called.  May be NULL.
  * - pChunkAllocator = Pointer to the IChunkAllocator interface used by the heap to allocate chunks of memory
  *                     for carving up by the heap.
  * - pMutexFactory = Pointer to the IMutexFactory interface used to allocate IMutex objects.
@@ -462,8 +466,9 @@ static const SEG_RODATA struct IConnectionPointContainerVTable vtblConnectionPoi
  * Returns:
  * Standard HRESULT success/failure.
  */
-HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocator *pChunkAllocator,
-		   IMutexFactory *pMutexFactory, UINT32 nChunkBits, IMalloc **ppHeap)
+HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT pfnAbort, PVOID pvAbortArg,
+		   IChunkAllocator *pChunkAllocator, IMutexFactory *pMutexFactory, UINT32 nChunkBits,
+		   IMalloc **ppHeap)
 {
   PHEAPDATA phd;   /* pointer to actual heap data */
   HRESULT hr;      /* HRESULT of intermediate operations */
@@ -481,6 +486,8 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocato
   phd->uiRefCount = 1;
   phd->uiFlags = 0;
   phd->pfnFreeRawHeapData = pfnFree;
+  phd->pfnAbort = pfnAbort;
+  phd->pvAbortArg = pvAbortArg;
   phd->nChunkBits = nChunkBits;
   phd->szChunk = 1 << nChunkBits;
   if (phd->szChunk < SYS_PAGE_SIZE)
@@ -497,10 +504,13 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocato
   ObjHlpFixedCpSetup(&(phd->fcpSequentialStream), (PUNKNOWN)phd, &IID_ISequentialStream,
 		     (IUnknown **)(&(phd->pDebugStream)), 1, NULL);
 
-  /* Setup base pointers. */
+  /* Setup all the various "subsystems." */
   hr = _HeapBaseSetup(phd);
   if (FAILED(hr))
     goto error0;
+  hr = _HeapChunkSetup(phd);
+  if (FAILED(hr))
+    goto error1;
 
 
 
@@ -508,7 +518,9 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocato
   *ppHeap = (IMalloc *)phd;
   return S_OK;
 
-  /*error1:*/
+  /*error2:*/
+  _HeapChunkShutdown(phd);
+error1:
   _HeapBaseShutdown(phd);
 error0:
   toplevel_shutdown(phd);

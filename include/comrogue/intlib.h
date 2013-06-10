@@ -49,6 +49,7 @@ typedef struct tagLDIV {
 CDECL_BEGIN
 
 extern HRESULT IntLDiv(PLDIV pResult, INT64 num, INT64 denom);
+extern INT32 IntFirstSet(INT32 nMask);
 
 CDECL_END
 

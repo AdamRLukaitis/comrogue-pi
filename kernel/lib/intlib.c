@@ -78,3 +78,27 @@ HRESULT IntLDiv(PLDIV pResult, INT64 num, INT64 denom)
     pResult->rem = -(pResult->rem);
   return S_OK;
 }
+
+/*
+ * Returns the index of the first bit set in the specified mask, where the least-significant bit is considered
+ * bit #1.
+ *
+ * Parameters:
+ * - nMask = The mask to be tested.
+ *
+ * Returns:
+ * - 0 = If nMask is 0.
+ * - Other = Index of the first set bit in nMask.
+ */
+INT32 IntFirstSet(INT32 nMask)
+{
+  register INT32 nBit;  /* bit index to return */
+  if (nMask)
+  {
+    for (nBit = 1; !(nMask & 1); nBit++)
+      nMask = ((UINT32)nMask) >> 1;
+    return nBit;
+  }
+  else
+    return 0;  /* corner case */
+}

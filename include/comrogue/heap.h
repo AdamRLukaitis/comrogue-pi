@@ -50,7 +50,8 @@ typedef struct tagRAWHEAPDATA
   UINT32 opaque[32];             /* opaque data, do not modify */
 } RAWHEAPDATA, *PRAWHEAPDATA;
 
-typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA prhd); /* function that optionally frees the heap data */
+typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA); /* function that optionally frees the heap data */
+typedef void (*PFNHEAPABORT)(PVOID);              /* function called to abort on serious error */
 
 /*--------------------
  * External functions
@@ -61,8 +62,9 @@ typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA prhd); /* function that optional
 
 CDECL_BEGIN
 
-extern HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, IChunkAllocator *pChunkAllocator,
-			  IMutexFactory *pMutexFactory, UINT32 nChunkBits, IMalloc **ppHeap);
+extern HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT pfnAbort, PVOID pvAbortArg,
+			  IChunkAllocator *pChunkAllocator, IMutexFactory *pMutexFactory, UINT32 nChunkBits,
+			  IMalloc **ppHeap);
 
 CDECL_END
 
