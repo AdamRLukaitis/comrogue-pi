@@ -61,6 +61,7 @@
 
 #define LOG_PTRSIZE     2   /* log2(sizeof(void *)) */
 #define LOG_INTSIZE     2   /* log2(sizeof(int)) */
+#define LOG_UINTSIZE    2   /* log2(sizeof(UINT32)) */
 #define LOG_INT64SIZE   3   /* log2(sizeof(long long)) */
 
 /* Boolean values */

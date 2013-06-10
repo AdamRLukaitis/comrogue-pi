@@ -49,6 +49,7 @@
 #include <comrogue/mutex.h>
 #include <comrogue/heap.h>
 #include <comrogue/objhelp.h>
+#include <comrogue/internals/dlist.h>
 #include <comrogue/internals/rbtree.h>
 #include <comrogue/internals/seg.h>
 
@@ -83,6 +84,164 @@ typedef struct tagEXTENT_NODE
   BOOL fZeroed;                  /* is this extent zeroed? */
 } EXTENT_NODE, *PEXTENT_NODE;
 typedef PEXTENT_NODE *PPEXTENT_NODE;
+
+/*---------------------
+ * Bitmap declarations
+ *---------------------
+ */
+
+/* Maximum number of regions per run */
+#define LG_RUN_MAXREGS             11
+#define RUN_MAXREGS                (1U << LG_RUN_MAXREGS)
+
+/* Maximum bitmap count */
+#define LG_BITMAP_MAXBITS          LG_RUN_MAXREGS
+
+typedef UINT32 BITMAP;             /* bitmap type definition */
+#define LG_SIZEOF_BITMAP           LOG_UINTSIZE
+
+/* Number of bits per group */
+#define LG_BITMAP_GROUP_NBITS      (LG_SIZEOF_BITMAP + 3)
+#define BITMAP_GROUP_NBITS         (1U << LG_BITMAP_GROUP_NBITS)
+#define BITMAP_GROUP_NBITS_MASK    (BITMAP_GROUP_NBITS - 1)
+
+/* Maximum number of bitmap levels */
+#define BITMAP_MAX_LEVELS \
+  ((LG_BITMAP_MAXBITS / LG_SIZEOF_BITMAP) + !!(LG_BITMAP_MAXBITS % LG_SIZEOF_BITMAP))
+
+/* Bitmap level structure */
+typedef struct tagBITMAPLEVEL
+{
+  SIZE_T ofsGroup;                 /* offset of groups for this level within array */
+} BITMAPLEVEL, *PBITMAPLEVEL;
+
+/* Bitmap information structure */
+typedef struct tagBITMAPINFO
+{
+  SIZE_T cBits;                    /* number of bits in bitmap */
+  UINT32 nLevels;                  /* number of levels required for bits */
+  BITMAPLEVEL aLevels[BITMAP_MAX_LEVELS + 1];  /* the levels - only first (nLevels + 1) used */
+} BITMAPINFO, *PBITMAPINFO;
+
+/*---------------------------------
+ * Thread-level cache declarations
+ *---------------------------------
+ */
+
+/* statistics per cache bin */
+typedef struct tagTCACHEBINSTATS
+{
+  UINT64 nRequests;                             /* number of requests in this particular bin */
+} TCACHEBINSTATS, *PTCACHEBINSTATS;
+
+/* single bin of the cache */
+typedef struct tagTCACHEBIN
+{
+  TCACHEBINSTATS stats;                         /* statistics for this bin */
+  INT32 nLowWatermark;                          /* minimum number cached since last GC */
+  UINT32 cbitFill;                              /* fill level */
+  UINT32 nCached;                               /* number of cached objects */
+  PPVOID ppvAvail;                              /* stack of cached objects */
+} TCACHEBIN, *PTCACHEBIN;
+
+typedef struct tagARENA ARENA, *PARENA;  /* forward declaration */
+
+/* thread cache */
+typedef struct tagTCACHE
+{
+  DLIST_FIELD_DECLARE(struct tagTCACHE, link);  /* link aggregator */
+  UINT64 cbProfAccum;                           /* accumulated bytes */
+  PARENA parena;                                /* this thread's arena */
+  UINT32 cEvents;                               /* event count since incremental GC */
+  UINT32 ndxNextGCBin;                          /* next bin to be GC'd */
+  TCACHEBIN aBins[0];                           /* cache bins (dynamically sized) */
+} TCACHE, *PTCACHE;
+
+/*------------------------
+ * Arena data definitions
+ *------------------------
+ */
+
+/* Chunk map, each element corresponds to one page within the chunk */
+typedef struct tagARENACHUNKMAP
+{
+  union
+  {
+    RBTREENODE rbtn;                                     /* tree of runs */
+    DLIST_FIELD_DECLARE(struct tagARENACHUNKMAP, link);  /* list of runs in purgatory */
+  } u;
+  SIZE_T bits;                                           /* run address and various flags */
+} ARENACHUNKMAP, *PARENACHUNKMAP;
+
+#define CHUNK_MAP_BININD_SHIFT    4                      /* shift count for bin index mask */
+#define BININD_INVALID            ((SIZE_T)0xFFU)        /* invalid bin index */
+#define CHUNK_MAP_BININD_MASK     ((SIZE_T)0xFF0U)       /* bin index mask */
+#define CHUNK_MAP_BININD_INVALID  CHUNK_MAP_BININD_MASK  /* invalid bin marker */
+#define CHUNK_MAP_FLAGS_MASK      ((SIZE_T)0xCU)         /* flag bits mask */
+#define CHUNK_MAP_DIRTY           ((SIZE_T)0x8U)         /* dirty flag */
+#define CHUNK_MAP_UNZEROED        ((SIZE_T)0x4U)         /* non-zeroed flag */
+#define CHUNK_MAP_LARGE           ((SIZE_T)0x2U)         /* large allocation flag */
+#define CHUNK_MAP_ALLOCATED       ((SIZE_T)0x1U)         /* allocated flag */
+#define CHUNK_MAP_KEY             CHUNK_MAP_ALLOCATED
+
+/* chunk header within an arena */
+typedef struct tagARENACHUNK
+{
+  PARENA parena;                 /* arena that owns the chunk */
+  RBTREENODE rbtnDirty;          /* linkage for tree of chunks with dirty runs */
+  SIZE_T cpgDirty;               /* number of dirty pages */
+  SIZE_T cAvailRuns;             /* number of available runs */
+  SIZE_T cAvailRunAdjacent;      /* number of available run adjacencies */
+  ARENACHUNKMAP aMaps[0];        /* map of pages within chunk */
+} ARENACHUNK, *PARENACHUNK;
+
+/* large allocation statistics */
+typedef struct tagMALLOCLARGESTATS
+{
+  UINT64 nMalloc;                /* number of allocation requests */
+  UINT64 nDalloc;                /* number of deallocation requests */
+  UINT64 nRequests;              /* number of allocation requests */
+  SIZE_T cRuns;                  /* count of runs of this size class */
+} MALLOCLARGESTATS, *PMALLOCLARGESTATS;
+
+/* Arena statistics data. */
+typedef struct tagARENASTATS
+{
+  SIZE_T cbMapped;               /* number of bytes currently mapped */
+  UINT64 cPurges;                /* number of purge sweeps made */
+  UINT64 cAdvise;                /* number of memory advise calls made */
+  UINT64 cPagesPurged;           /* number of pages purged */
+  SIZE_T cbAllocatedLarge;       /* number of bytes of large allocations */
+  UINT64 cLargeMalloc;           /* number of large allocations */
+  UINT64 cLargeDalloc;           /* number of large deallocations */
+  UINT64 cLargeRequests;         /* number of large allocation requests */
+  PMALLOCLARGESTATS amls;        /* array of stat elements, one per size class */
+} ARENASTATS, *PARENASTATS;
+
+struct tagARENABININFO
+{
+  SIZE_T cbRegions;              /* size of regions in a run */
+  SIZE_T cbRedzone;              /* size of the red zone */
+  SIZE_T cbInterval;             /* interval between regions */
+  SIZE_T cbRunSize;              /* total size of a run for this size class */
+  UINT32 nRegions;               /* number of regions in a run for this size class */
+  UINT32 ofsBitmap;              /* offset of bitmap element in run header */
+  BITMAPINFO bitmapinfo;         /* manipulates bitmaps associated with this bin's runs */
+  UINT32 ofsCtx0;                /* offset of context in run header, or 0 */
+  UINT32 ofsRegion0;             /* offse of first region in a run for size class */
+} ARENABININFO, *PARENABININFO;
+
+/* The actual arena definition. */
+struct tagARENA
+{
+  UINT32 nIndex;                            /* index of this arena within array */
+  UINT32 nThreads;                          /* number of threads assigned to this arena */
+  IMutex *pmtxLock;                         /* arena lock */
+  ARENASTATS stats;                         /* arena statistics */
+  DLIST_HEAD_DECLARE(TCACHE, dlistTCache);  /* list of tcaches for threads in arena */
+  UINT64 cbProfAccum;                       /* accumulated bytes */
+  RBTREE rbtDirtyChunks;                    /* tree of dirty page-containing chunks */
+};
 
 /*----------------------------------
  * The actual heap data declaration
@@ -197,6 +356,18 @@ extern PEXTENT_NODE _HeapBaseNodeAlloc(PHEAPDATA phd);
 extern void _HeapBaseNodeDeAlloc(PHEAPDATA phd, PEXTENT_NODE pexn);
 extern HRESULT _HeapBaseSetup(PHEAPDATA phd);
 extern void _HeapBaseShutdown(PHEAPDATA phd);
+
+CDECL_END
+
+/*----------------------------
+ * Arena management functions
+ *----------------------------
+ */
+
+CDECL_BEGIN
+
+extern HRESULT _HeapArenaSetup(PHEAPDATA phd);
+extern void _HeapArenaShutdown(PHEAPDATA phd);
 
 CDECL_END
 
