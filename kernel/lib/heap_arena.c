@@ -34,6 +34,8 @@
  */
 #include <comrogue/compiler_macros.h>
 #include <comrogue/types.h>
+#include <comrogue/scode.h>
+#include <comrogue/internals/mmu.h>
 #include "heap_internals.h"
 
 #ifdef _H_THIS_FILE
@@ -46,13 +48,66 @@ _DECLARE_H_THIS_FILE
  *----------------------------
  */
 
+static SIZE_T bin_info_cbRunSize_calc(PHEAPDATA phd, PARENABININFO pBinInfo, SIZE_T cbMinRun)
+{
+  /*
+  SIZE_T cbPad;
+  SIZE_T cbTryRunSize;
+  SIZE_T cbGoodRunSize;
+  UINT32 nTryRegions;
+  UINT32 nGoodRegions;
+  UINT32 cbTryHeader;
+  UINT32 cbGoodHeader;
+  UINT32 ofsTryBitmap;
+  UINT32 ofsGoodBitmap;
+  UINT32 ofsTryCtx0;
+  UINT32 ofsGoodCtx0;
+  UINT32 ofsTryRedZone0;
+  UINT32 ofsGoodRedZone0;
+  */
+
+  _H_ASSERT(phd, cbMinRun >= SYS_PAGE_SIZE);
+  _H_ASSERT(phd, cbMinRun <= phd->szArenaMaxClass);
 
 
+  return 0; /* TODO */
+}
 
+static void bin_info_init(PHEAPDATA phd)
+{
+  PARENABININFO pBinInfo;             /* pointer to arena bin information */
+  SIZE_T szPrevRun = SYS_PAGE_SIZE;   /* previous run size */
+
+#define SIZE_CLASS(bin, delta, size) \
+  pBinInfo = &(phd->aArenaBinInfo[bin]); \
+  pBinInfo->cbRegions = size; \
+  szPrevRun = bin_info_cbRunSize_calc(phd, pBinInfo, szPrevRun); \
+  /* TODO bitmap_info_init */
+  SIZE_CLASSES
+#undef SIZE_CLASS
+
+  /* TODO */
+}
 
 HRESULT _HeapArenaSetup(PHEAPDATA phd)
 {
-  return S_OK; /* TODO */
+  SIZE_T szHeader;   /* size of the header */
+  UINT32 i;          /* loop counter */
+
+  phd->cpgMapBias = 0;
+  for (i = 0; i < 3; i++)
+  {
+    szHeader = sizeof(ARENACHUNK) + (sizeof(ARENACHUNKMAP) * (phd->cpgChunk - phd->cpgMapBias));
+    phd->cpgMapBias = (szHeader >> SYS_PAGE_BITS) + ((szHeader & SYS_PAGE_MASK) != 0);
+  }
+
+  _H_ASSERT(phd, phd->cpgMapBias > 0);
+
+  phd->szArenaMaxClass = phd->szChunk - (phd->cpgMapBias << SYS_PAGE_BITS);
+
+  bin_info_init(phd);
+
+  return S_OK;
 }
 
 void _HeapArenaShutdown(PHEAPDATA phd)

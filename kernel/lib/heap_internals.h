@@ -53,6 +53,52 @@
 #include <comrogue/internals/rbtree.h>
 #include <comrogue/internals/seg.h>
 
+#define LG_TINY_MIN 3                   /* smallest size class to support */
+#define TINY_MIN (1U << LG_TINY_MIN)
+
+#define LG_QUANTUM  3                   /* minimum allocation quantum is 2^3 = 8 bytes */
+#define QUANTUM ((SIZE_T)(1U << LG_QUANTUM))
+#define QUANTUM_MASK  (QUANTUM - 1)
+
+#define QUANTUM_CEILING(a)  (((a) + QUANTUM_MASK) & ~QUANTUM_MASK)
+
+/* Size class data is (bin index, delta in bytes, size in bytes) */
+#define SIZE_CLASSES          \
+    SIZE_CLASS(0,  8,   8)    \
+    SIZE_CLASS(1,  8,   16)   \
+    SIZE_CLASS(2,  8,   24)   \
+    SIZE_CLASS(3,  8,   32)   \
+    SIZE_CLASS(4,  8,   40)   \
+    SIZE_CLASS(5,  8,   48)   \
+    SIZE_CLASS(6,  8,   56)   \
+    SIZE_CLASS(7,  8,   64)   \
+    SIZE_CLASS(8,  16,  80)   \
+    SIZE_CLASS(9,  16,  96)   \
+    SIZE_CLASS(10, 16,  112)  \
+    SIZE_CLASS(11, 16,  128)  \
+    SIZE_CLASS(12, 32,  160)  \
+    SIZE_CLASS(13, 32,  192)  \
+    SIZE_CLASS(14, 32,  224)  \
+    SIZE_CLASS(15, 32,  256)  \
+    SIZE_CLASS(16, 64,  320)  \
+    SIZE_CLASS(17, 64,  384)  \
+    SIZE_CLASS(18, 64,  448)  \
+    SIZE_CLASS(19, 64,  512)  \
+    SIZE_CLASS(20, 128, 640)  \
+    SIZE_CLASS(21, 128, 768)  \
+    SIZE_CLASS(22, 128, 896)  \
+    SIZE_CLASS(23, 128, 1024) \
+    SIZE_CLASS(24, 256, 1280) \
+    SIZE_CLASS(25, 256, 1536) \
+    SIZE_CLASS(26, 256, 1792) \
+    SIZE_CLASS(27, 256, 2048) \
+    SIZE_CLASS(28, 512, 2560) \
+    SIZE_CLASS(29, 512, 3072) \
+    SIZE_CLASS(30, 512, 3584) \
+
+#define NBINS          31    /* number of bins */
+#define SMALL_MAXCLASS 3584  /* max size for "small" class */
+
 /*--------------------------------------------------------------
  * Radix tree implementation for keeping track of memory chunks
  *--------------------------------------------------------------
@@ -218,7 +264,8 @@ typedef struct tagARENASTATS
   PMALLOCLARGESTATS amls;        /* array of stat elements, one per size class */
 } ARENASTATS, *PARENASTATS;
 
-struct tagARENABININFO
+/* Arena bin information */
+typedef struct tagARENABININFO
 {
   SIZE_T cbRegions;              /* size of regions in a run */
   SIZE_T cbRedzone;              /* size of the red zone */
@@ -277,6 +324,9 @@ typedef struct tagHEAPDATA {
   PVOID pvBaseNext;                                /* next allocation location */
   PVOID pvBasePast;                                /* address immediately past pvBasePages */
   PEXTENT_NODE pexnBaseNodes;                      /* pointer to base nodes */
+  SIZE_T cpgMapBias;                               /* number of header pages for arena chunks */
+  SIZE_T szArenaMaxClass;                          /* maximum size class for arenas */
+  ARENABININFO aArenaBinInfo[NBINS];               /* array of arena bin information */
 } HEAPDATA, *PHEAPDATA;
 
 /*---------------------------------
