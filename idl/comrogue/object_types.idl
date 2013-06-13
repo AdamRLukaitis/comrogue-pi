@@ -59,6 +59,7 @@ interface ICOMROGUETypes
   typedef UINT32 *PUINT32;
   typedef INT64 *PINT64;
   typedef UINT64 *PUINT64;
+  typedef SIZE_T *PSIZE_T;
   typedef void *PVOID;
   typedef const void *PCVOID;
 
@@ -76,6 +77,7 @@ interface ICOMROGUETypes
   typedef UCHAR *PUCHAR;
   typedef BYTE *PBYTE;
   typedef WCHAR *PWCHAR;
+  typedef PCCHAR *PPCCHAR;
   [string] typedef CHAR *PSTR;
   [string] typedef const CHAR *PCSTR;
   [string] typedef WCHAR *PWSTR;

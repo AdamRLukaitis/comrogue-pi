@@ -62,6 +62,12 @@
 
 #define QUANTUM_CEILING(a)  (((a) + QUANTUM_MASK) & ~QUANTUM_MASK)
 
+#define LG_SIZEOF_LONG  LOG_INTSIZE
+#define LONG            ((SIZE_T)(1U << LG_SIZEOF_LONG))
+#define LONG_MASK       (LONG - 1)
+
+#define LONG_CEILING(a)     (((a) + LONG_MASK) & ~LONG_MASK)
+
 /* Size class data is (bin index, delta in bytes, size in bytes) */
 #define SIZE_CLASSES          \
     SIZE_CLASS(0,  8,   8)    \
@@ -243,6 +249,20 @@ typedef struct tagARENACHUNK
   ARENACHUNKMAP aMaps[0];        /* map of pages within chunk */
 } ARENACHUNK, *PARENACHUNK;
 
+/* per-bin allocation statistics */
+typedef struct tagMALLOCBINSTATS
+{
+  SIZE_T cbAllocated;            /* current number of bytes allocated */
+  UINT64 cMalloc;                /* number of allocation requests */
+  UINT64 cDalloc;                /* number of deallocation requests */
+  UINT64 cRequests;              /* number of total requests, including cache */
+  UINT64 cFills;                 /* number of cache fills to this bin */
+  UINT64 cFlushes;               /* number of cache flushes to this bin */
+  UINT64 cRuns;                  /* total number of created runs */
+  UINT64 cReRuns;                /* total number of reused runs */
+  SIZE_T cRunsCurrent;           /* current number of runs in the bin */
+} MALLOCBINSTATS, *PMALLOCBINSTATS;
+
 /* large allocation statistics */
 typedef struct tagMALLOCLARGESTATS
 {
@@ -266,6 +286,8 @@ typedef struct tagARENASTATS
   PMALLOCLARGESTATS amls;        /* array of stat elements, one per size class */
 } ARENASTATS, *PARENASTATS;
 
+#define REDZONE_MINSIZE   16     /* red zones must be at least this many bytes */
+
 /* Arena bin information */
 typedef struct tagARENABININFO
 {
@@ -280,6 +302,23 @@ typedef struct tagARENABININFO
   UINT32 ofsRegion0;             /* offset of first region in a run for size class */
 } ARENABININFO, *PARENABININFO;
 
+typedef struct tagARENABIN ARENABIN, *PARENABIN;  /* forward declaration */
+
+typedef struct tagARENARUN
+{
+  PARENABIN pBin;                /* bin this run is associated with */
+  UINT32 ndxNext;                /* index of next region never allocated */
+  UINT32 nFree;                  /* number of free regions in run */
+} ARENARUN, *PARENARUN;
+
+struct tagARENABIN
+{
+  IMutex *pmtxLock;              /* arena bin lock */
+  PARENARUN prunCurrent;         /* pointer to current run servicing this bin's size class */
+  RBTREE rbtRuns;                /* tree of non-full runs */
+  MALLOCBINSTATS stats;          /* bin statistics */
+};
+
 /* The actual arena definition. */
 struct tagARENA
 {
@@ -290,12 +329,21 @@ struct tagARENA
   DLIST_HEAD_DECLARE(TCACHE, dlistTCache);  /* list of tcaches for threads in arena */
   UINT64 cbProfAccum;                       /* accumulated bytes */
   RBTREE rbtDirtyChunks;                    /* tree of dirty page-containing chunks */
+  PARENACHUNK pchunkSpare;                  /* most recently freed chunk, one spare per arena */
+  SIZE_T cpgActive;                         /* number of pages in active runs */
+  SIZE_T cpgDirty;                          /* number of potential dirty pages */
+  SIZE_T cpgPurgatory;                      /* number of pages being purged */
+  RBTREE rbtAvailRuns;                      /* tree of the available runs */
+  ARENABIN aBins[NBINS];                    /* bins for storing free regions */
 };
 
 /*----------------------------------
  * The actual heap data declaration
  *----------------------------------
  */
+
+#define PHDFLAGS_REDZONE   0x00000001U             /* use red zones? */
+#define PHDFLAGS_JUNKFILL  0x00000002U             /* fill junk in heap? */
 
 typedef struct tagHEAPDATA {
   IMalloc mallocInterface;                         /* pointer to IMalloc interface - MUST BE FIRST! */
@@ -439,10 +487,65 @@ CDECL_END
 
 CDECL_BEGIN
 
+extern const BYTE abSmallSize2Bin[];
+
+extern void _HeapArenaPurgeAll(PHEAPDATA phd, PARENA pArena);
+extern void _HeapArenaTCacheFillSmall(PHEAPDATA phd, PARENA pArena, PTCACHEBIN ptbin, SIZE_T ndxBin,
+                                      UINT64 cbProfAccum);
+extern void _HeapArenaAllocJunkSmall(PHEAPDATA phd, PVOID pv, PARENABININFO pBinInfo, BOOL fZero);
+extern void _HeapArenaDAllocJunkSmall(PHEAPDATA phd, PVOID pv, PARENABININFO pBinInfo);
+extern PVOID _HeapArenaMallocSmall(PHEAPDATA phd, PARENA pArena, SIZE_T sz, BOOL fZero);
+extern PVOID _HeapArenaMallocLarge(PHEAPDATA phd, PARENA pArena, SIZE_T sz, BOOL fZero);
+extern PVOID _HeapArenaPalloc(PHEAPDATA phd, PARENA pArena, SIZE_T sz, SIZE_T szAlignment, BOOL fZero);
+extern void _HeapArenaProfPromoted(PHEAPDATA phd, PCVOID pv, SIZE_T sz);
+extern void _HeapArenaDAllocBinLocked(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, PVOID pv,
+				      PARENACHUNKMAP pMapElement);
+extern void _HeapArenaDAllocBin(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, PVOID pv,
+				PARENACHUNKMAP pMapElement);
+extern void _HeapArenaDAllocSmall(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, PVOID pv, SIZE_T ndxPage);
+extern void _HeapArenaDAllocLargeLocked(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, PVOID pv);
+extern void _HeapArenaDAllocLarge(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, PVOID pv);
+extern PVOID _HeapArenaRAllocNoMove(PHEAPDATA phd, PVOID pv, SIZE_T szOld, SIZE_T sz, SIZE_T szExtra, BOOL fZero);
+extern PVOID _HeapArenaRAlloc(PHEAPDATA phd, PVOID pv, SIZE_T szOld, SIZE_T sz, SIZE_T szExtra, SIZE_T szAlignment,
+			      BOOL fZero, BOOL fTryTCacheAlloc, BOOL fTryTCacheDAlloc);
+extern void _HeapArenaStatsMerge(PHEAPDATA phd, PARENA pArena, PPCCHAR dss, PSIZE_T pnActive, PSIZE_T pnDirty,
+				 PARENASTATS pArenaStats, PMALLOCBINSTATS pBinStats, PMALLOCLARGESTATS pLargeStats);
+extern BOOL _HeapArenaNew(PHEAPDATA phd, PARENA pArena, UINT32 ndx);
 extern HRESULT _HeapArenaSetup(PHEAPDATA phd);
 extern void _HeapArenaShutdown(PHEAPDATA phd);
+extern PARENACHUNKMAP _HeapArenaMapPGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern PSIZE_T _HeapArenaMapBitsPGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsUnallocatedSizeGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsLargeSizeGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsSmallRunIndexGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsBinIndexGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsDirtyGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsUnzeroedGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsLargeGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern SIZE_T _HeapArenaMapBitsAllocatedGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage);
+extern void _HeapArenaMapBitsUnallocatedSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T sz,
+					    SIZE_T szFlags);
+extern void _HeapArenaMapBitsUnallocatedSizeSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T sz);
+extern void _HeapArenaMapBitsLargeSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T sz,
+				      SIZE_T szFlags);
+extern void _HeapArenaMapBitsLargeBinIndSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T ndxBin);
+extern void _HeapArenaMapBitsSmallSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T ndxRun,
+				      SIZE_T ndxBin, SIZE_T szFlags);
+extern void _HeapArenaMapBitsUnzeroedSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T szUnzeroed);
+extern BOOL _HeapArenaProfAccumImpl(PHEAPDATA phd, PARENA pArena, UINT64 cbAccum);
+extern BOOL _HeapArenaProfAccumLocked(PHEAPDATA phd, PARENA pArena, UINT64 cbAccum);
+extern BOOL _HeapArenaProfAccum(PHEAPDATA phd, PARENA pArena, UINT64 cbAccum);
+extern SIZE_T _HeapArenaPtrSmallBinIndGet(PHEAPDATA phd, PCVOID pv, SIZE_T szMapBits);
+extern SIZE_T _HeapArenaBinIndex(PHEAPDATA phd, PARENA pArena, PARENABIN pBin);
+extern UINT32 _HeapArenaRunRegInd(PHEAPDATA phd, PARENARUN pRun, PARENABININFO pBinInfo, PCVOID pv);
+extern PVOID _HeapArenaMalloc(PHEAPDATA phd, PARENA pArena, SIZE_T sz, BOOL fZero, BOOL fTryTCache);
+extern SIZE_T _HeapArenaSAlloc(PHEAPDATA phd, PCVOID pv, BOOL fDemote);
+extern void _HeapArenaDAlloc(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, PCVOID pv, BOOL fTryTCache);
 
 CDECL_END
+
+#define SMALL_SIZE2BIN(s)  (abSmallSize2Bin[(s - 1) >> LG_TINY_MIN])
 
 #endif /* __ASM__ */
 
