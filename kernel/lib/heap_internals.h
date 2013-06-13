@@ -144,6 +144,7 @@ typedef PEXTENT_NODE *PPEXTENT_NODE;
 #define LG_BITMAP_MAXBITS          LG_RUN_MAXREGS
 
 typedef UINT32 BITMAP;             /* bitmap type definition */
+typedef BITMAP *PBITMAP;
 #define LG_SIZEOF_BITMAP           LOG_UINTSIZE
 
 /* Number of bits per group */
@@ -168,6 +169,7 @@ typedef struct tagBITMAPINFO
   UINT32 nLevels;                  /* number of levels required for bits */
   BITMAPLEVEL aLevels[BITMAP_MAX_LEVELS + 1];  /* the levels - only first (nLevels + 1) used */
 } BITMAPINFO, *PBITMAPINFO;
+typedef const BITMAPINFO *PCBITMAPINFO;
 
 /*---------------------------------
  * Thread-level cache declarations
@@ -275,7 +277,7 @@ typedef struct tagARENABININFO
   UINT32 ofsBitmap;              /* offset of bitmap element in run header */
   BITMAPINFO bitmapinfo;         /* manipulates bitmaps associated with this bin's runs */
   UINT32 ofsCtx0;                /* offset of context in run header, or 0 */
-  UINT32 ofsRegion0;             /* offse of first region in a run for size class */
+  UINT32 ofsRegion0;             /* offset of first region in a run for size class */
 } ARENABININFO, *PARENABININFO;
 
 /* The actual arena definition. */
@@ -408,6 +410,25 @@ extern PEXTENT_NODE _HeapBaseNodeAlloc(PHEAPDATA phd);
 extern void _HeapBaseNodeDeAlloc(PHEAPDATA phd, PEXTENT_NODE pexn);
 extern HRESULT _HeapBaseSetup(PHEAPDATA phd);
 extern void _HeapBaseShutdown(PHEAPDATA phd);
+
+CDECL_END
+
+/*------------------
+ * Bitmap functions
+ *------------------
+ */
+
+CDECL_BEGIN
+
+extern void _HeapBitmapInfoInit(PBITMAPINFO pBInfo, SIZE_T cBits);
+extern SIZE_T _HeapBitmapInfoNumGroups(PCBITMAPINFO pcBInfo);
+extern SIZE_T _HeapBitmapSize(SIZE_T cBits);
+extern void _HeapBitmapInit(PBITMAP pBitmap, PCBITMAPINFO pcBInfo);
+extern BOOL _HeapBitmapFull(PBITMAP pBitmap, PCBITMAPINFO pcBInfo);
+extern BOOL _HeapBitmapGet(PBITMAP pBitmap, PCBITMAPINFO pcBInfo, SIZE_T nBit);
+extern void _HeapBitmapSet(PBITMAP pBitmap, PCBITMAPINFO pcBInfo, SIZE_T nBit);
+extern SIZE_T _HeapBitmapSetFirstUnset(PBITMAP pBitmap, PCBITMAPINFO pcBInfo);
+extern void _HeapBitmapUnset(PBITMAP pBitmap, PCBITMAPINFO pcBInfo, SIZE_T nBit);
 
 CDECL_END
 

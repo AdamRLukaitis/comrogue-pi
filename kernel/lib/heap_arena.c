@@ -78,11 +78,12 @@ static void bin_info_init(PHEAPDATA phd)
   PARENABININFO pBinInfo;             /* pointer to arena bin information */
   SIZE_T szPrevRun = SYS_PAGE_SIZE;   /* previous run size */
 
+  /* Initialize all the bins. */
 #define SIZE_CLASS(bin, delta, size) \
   pBinInfo = &(phd->aArenaBinInfo[bin]); \
   pBinInfo->cbRegions = size; \
   szPrevRun = bin_info_cbRunSize_calc(phd, pBinInfo, szPrevRun); \
-  /* TODO bitmap_info_init */
+  _HeapBitmapInfoInit(&(pBinInfo->bitmapinfo), pBinInfo->nRegions);
   SIZE_CLASSES
 #undef SIZE_CLASS
 
@@ -102,11 +103,8 @@ HRESULT _HeapArenaSetup(PHEAPDATA phd)
   }
 
   _H_ASSERT(phd, phd->cpgMapBias > 0);
-
   phd->szArenaMaxClass = phd->szChunk - (phd->cpgMapBias << SYS_PAGE_BITS);
-
   bin_info_init(phd);
-
   return S_OK;
 }
 
