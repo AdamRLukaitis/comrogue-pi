@@ -96,6 +96,8 @@ interface IChunkAllocator: IUnknown
 interface IHeapConfiguration: IUnknown
 {
   [unique] typedef IHeapConfiguration *PHEAPCONFIGURATION;
+  cpp_quote("typedef void (*PFNHEAPABORT)(PVOID);")              /* function called to abort on serious error */
+  HRESULT SetAbortProc([in] PFNHEAPABORT pfnHeapAbort, [in] PVOID pvArg);
   HRESULT GetActiveDirtyRatio([out] SSIZE_T *pcbRatio);
   HRESULT SetActiveDirtyRatio([in] SSIZE_T cbRatio);
 }

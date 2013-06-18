@@ -208,7 +208,7 @@ SIZE_T _HeapArenaMapBitsBinIndexGet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T nd
 {
   register SIZE_T szMapBits = _HeapArenaMapPGet(phd, pChunk, ndxPage)->bits;
   register SIZE_T ndxBin = (szMapBits & CHUNK_MAP_BININD_MASK) >> CHUNK_MAP_BININD_SHIFT;
-  _H_ASSERT(phd, (ndxBin < NBINS) || (ndxBin = BININD_INVALID));
+  _H_ASSERT(phd, (ndxBin < NBINS) || (ndxBin == BININD_INVALID));
   return ndxBin;
 }
 
@@ -348,45 +348,207 @@ void _HeapArenaMapBitsLargeSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage
                  | CHUNK_MAP_ALLOCATED;
 }
 
+/*
+ * Sets the bin index of the given page that is allocated as part of a large allocation.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pChunk = Pointer to the arena chunk.
+ * - ndxPage = Index of the page to set the bin index for.
+ * - ndxBin = Index of the bin to set into the page.
+ *
+ * Returns:
+ * Nothing.
+ */
 void _HeapArenaMapBitsLargeBinIndSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T ndxBin)
 {
-  /* TODO */
+  register PSIZE_T pMapBits;
+  _H_ASSERT(phd, ndxBin <= BININD_INVALID);
+  pMapBits = _HeapArenaMapBitsPGet(phd, pChunk, ndxPage);
+  _H_ASSERT(phd, _HeapArenaMapBitsLargeSizeGet(phd, pChunk, ndxPage) == SYS_PAGE_SIZE);
+  *pMapBits = (*pMapBits & ~CHUNK_MAP_BININD_MASK) | (ndxBin << CHUNK_MAP_BININD_SHIFT);
 }
 
+/*
+ * Sets the run/flags bits of the given page to mark it as part of a "small" allocation.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pChunk = Pointer to the arena chunk.
+ * - ndxPage = Index of the page to set the status for.
+ * - ndxRun = Index of the run the page belongs to.
+ * - ndxBin = Index of the bin to set into the page.
+ * - szFlags = May be either CHUNK_MAP_DIRTY or 0, to set the page "dirty" flag.
+ *
+ * Returns:
+ * Nothing.
+ */
 void _HeapArenaMapBitsSmallSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T ndxRun, SIZE_T ndxBin,
 			       SIZE_T szFlags)
 {
-  /* TODO */
+  register PSIZE_T pMapBits = _HeapArenaMapBitsPGet(phd, pChunk, ndxPage);
+  _H_ASSERT(phd, ndxBin < BININD_INVALID);
+  _H_ASSERT(phd, ndxPage - ndxRun >= phd->cpgMapBias);
+  _H_ASSERT(phd, (szFlags & CHUNK_MAP_DIRTY) == szFlags);
+  /* preserve the existing "unzeroed" flag */
+  *pMapBits = (ndxRun << SYS_PAGE_BITS) | (ndxBin << CHUNK_MAP_BININD_SHIFT) | szFlags
+            | (*pMapBits & CHUNK_MAP_UNZEROED) | CHUNK_MAP_ALLOCATED;
 }
 
+/*
+ * Sets the unzeroed bit of the given page.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pChunk = Pointer to the arena chunk.
+ * - ndxPage = Index of the page to set the status for.
+ * - szUnzeroed = Either 0 or CHUNK_MAP_UNZEROED, to set the status flag.
+ *
+ * Returns:
+ * Nothing.
+ */
 void _HeapArenaMapBitsUnzeroedSet(PHEAPDATA phd, PARENACHUNK pChunk, SIZE_T ndxPage, SIZE_T szUnzeroed)
 {
-  /* TODO */
+  register PSIZE_T pMapBits = _HeapArenaMapBitsPGet(phd, pChunk, ndxPage);
+  *pMapBits = (*pMapBits & ~CHUNK_MAP_UNZEROED) | szUnzeroed;
 }
 
+/*
+ * Adds a byte count to the arena's profile accumulator, triggering some behavior if the profile accumulator
+ * rolls over the interval count.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pArena = Pointer to the arena to add a count to.
+ * - cbAccum = Number of bytes to add to the accumulator.
+ *
+ * Returns:
+ * - TRUE = The accumulator rolled over the profile interval and was adjusted.
+ * - FALSE = The accumulator did not roll over the profile interval.
+ */
 BOOL _HeapArenaProfAccumImpl(PHEAPDATA phd, PARENA pArena, UINT64 cbAccum)
 {
-  return FALSE; /* TODO */
+  /* XXX assert the profile interval is non-zero */
+  pArena->cbProfAccum += cbAccum;
+  /* XXX
+    if (pArena->cbProfAccum >= phd->prof_interval)
+    {
+      pArena->cbProfAccum -= phd->prof_interval;
+      return TRUE;
+    }
+   */
+  return FALSE;
 }
 
+/*
+ * Adds a byte count to the arena's profile accumulator, triggering some behavior if the profile accumulator
+ * rolls over the interval count.  Assumes the arena mutex is locked.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pArena = Pointer to the arena to add a count to.
+ * - cbAccum = Number of bytes to add to the accumulator.
+ *
+ * Returns:
+ * - TRUE = The accumulator rolled over the profile interval and was adjusted.
+ * - FALSE = The accumulator did not roll over the profile interval, or profiling was not enabled.
+ */
 BOOL _HeapArenaProfAccumLocked(PHEAPDATA phd, PARENA pArena, UINT64 cbAccum)
 {
-  return FALSE; /* TODO */
+  return FALSE; /* XXX if phd->prof_interval == 0 */
+  /* XXX return _HeapArenaProfAccumImpl(phd, pArena, cbAccum); */
 }
 
+/*
+ * Adds a byte count to the arena's profile accumulator, triggering some behavior if the profile accumulator
+ * rolls over the interval count.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pArena = Pointer to the arena to add a count to.
+ * - cbAccum = Number of bytes to add to the accumulator.
+ *
+ * Returns:
+ * - TRUE = The accumulator rolled over the profile interval and was adjusted.
+ * - FALSE = The accumulator did not roll over the profile interval, or profiling was not enabled.
+ */
 BOOL _HeapArenaProfAccum(PHEAPDATA phd, PARENA pArena, UINT64 cbAccum)
 {
-  return FALSE; /* TODO */
+  return FALSE; /* XXX if phd->prof_interval == 0 */
+  /* XXX
+     {
+       BOOL rc;
+       IMutex_Lock(pArena->pmtxLock);
+       rc = _HeapArenaProfAccumImpl(phd, pArena, cbAccum);
+       IMutex_Unlock(pArena->pmtxLock);
+       return rc;
+     }
+   */
 }
 
+/*
+ * Returns the bin index of the given page the pointer is on used for small allocations.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pv = Pointer to allocation to get the bin index for.
+ * - szMapBits = Map bits for the page the pointer points to.
+ *
+ * Returns:
+ * The associated bin index.
+ */
 SIZE_T _HeapArenaPtrSmallBinIndGet(PHEAPDATA phd, PCVOID pv, SIZE_T szMapBits)
 {
-  return 0; /* TODO */
+  SIZE_T ndxBin = (szMapBits & CHUNK_MAP_BININD_MASK) >> CHUNK_MAP_BININD_SHIFT;
+
+#if 0 /* debugging code */
+  {
+    PARENACHUNK pChunk;       /* pointer to enclosing chunk */
+    PARENA pArena;            /* pointer to arena for the chunk */
+    SIZE_T ndxPage;           /* calculated page index */
+    SIZE_T szMapBitsActual;   /* actual retrieved map bits */
+    PARENARUN pRun;           /* pointer to run for this allocation */
+    PARENABIN pBin;           /* pointer to bin for this allocation */
+    SIZE_T ndxBinActual;      /* actual bin index for this allocation */
+    PARENABININFO pBinInfo;   /* pointer to bin info */
+
+    _H_ASSERT(phd, ndxBin != BININD_INVALID);
+    _H_ASSERT(phd, ndxBin < NBINS);
+    pChunk = (PARENACHUNK)CHUNK_ADDR2BASE(phd, pv);
+    pArena = pChunk->parena;
+    ndxPage = ((UINT_PTR)pv - (UINT_PTR)pChunk) >> SYS_PAGE_BITS;
+    szMapBitsActual = _HeapArenaMapBitsGet(phd, pChunk, ndxPage);
+    _H_ASSERT(phd, szMapBits == szMapBitsActual);
+    _H_ASSERT(phd, _HeapArenaMapBitsLargeGet(phd, pChunk, ndxPage) == 0);
+    _H_ASSERT(phd, _HeapArenaMapBitsAllocatedGet(phd, pChunk, ndxPage) != 0);
+    pRun = (PARENARUN)((UINT_PTR)pChunk + (UINT_PTR)((ndxPage - (szMapBitsActual >> SYS_PAGE_SIZE)) << SYS_PAGE_SIZE));
+    pBin = pRun->pBin;
+    ndxBinActual = pBin - pArena->aBins;
+    _H_ASSERT(phd, ndxBin == ndxBinActual);
+    pBinInfo = &(phd->aArenaBinInfo[ndxBinActual]);
+    _H_ASSERT(phd, ((UINT_PTR)pv - ((UINT_PTR)pRun + (UINT_PTR)(pBinInfo->ofsRegion0))) % pBinInfo->cbInterval == 0);
+  }
+#endif
+
+  return ndxBin;
 }
 
+/*
+ * Returns the index of a specific bin within an arena.
+ *
+ * Parameters:
+ * - phd = Pointer to the HEAPDATA block.
+ * - pArena = Pointer to the arena.
+ * - pBin = Pointer to the bin within the arena.
+ *
+ * Returns:
+ * Index of the bin within the arena.
+ */
 SIZE_T _HeapArenaBinIndex(PHEAPDATA phd, PARENA pArena, PARENABIN pBin)
 {
-  return 0; /* TODO */
+  SIZE_T ndxBin = pBin - pArena->aBins;
+  _H_ASSERT(phd, ndxBin < NBINS);
+  return ndxBin;
 }
 
 UINT32 _HeapArenaRunRegInd(PHEAPDATA phd, PARENARUN pRun, PARENABININFO pBinInfo, PCVOID pv)

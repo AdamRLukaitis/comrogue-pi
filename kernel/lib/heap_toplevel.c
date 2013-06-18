@@ -45,7 +45,10 @@
 #include "heap_internals.h"
 #include "enumgeneric.h"
 
-#define PHDFLAGS_DELETING   0x80000000           /* deleting the heap */
+#define PHDFLAGS_DELETING        0x80000000           /* deleting the heap */
+#define PHDFLAGS_PROFILE_ACTIVE  0x40000000           /* profile is active */
+
+#define PHDFLAGS_INIT (PHDFLAGS_REDZONE|PHDFLAGS_JUNKFILL|PHDFLAGS_ZEROFILL|PHDFLAGS_NOTCACHE|PHDFLAGS_PROFILE)
 
 /*------------------------
  * IMalloc implementation
@@ -501,6 +504,25 @@ static UINT32 heapconf_Release(IUnknown *pThis)
 }
 
 /*
+ * Sets the function to call if the heap decides to abort operation.
+ *
+ * Parameters:
+ * - pThis = Pointer to the HeapConfiguration interface in the heap data object.
+ * - pfnHeapAbort = Pointer to the function to call when the heap aborts.
+ * - pvArg = Pointer to argument to pass to the heap abort function.
+ *
+ * Returns:
+ * Standard HRESULT success/failure indicator.
+ */
+static HRESULT heapconf_SetAbortProc(IHeapConfiguration *pThis, PFNHEAPABORT pfnHeapAbort, PVOID pvArg)
+{
+  PHEAPDATA phd = (PHEAPDATA)HeapDataPtr(pThis);  /* pointer to heap data */
+  phd->pfnAbort = pfnHeapAbort;
+  phd->pvAbortArg = pvArg;
+  return S_OK;
+}
+
+/*
  * Retrieves the current ratio of active to dirty pages in the heap, expressed as a base-2 logarithm value.
  * A value of -1 disables dirty page purging.
  *
@@ -548,6 +570,7 @@ static const SEG_RODATA struct IHeapConfigurationVTable vtblHeapConfiguration =
   .QueryInterface = heapconf_QueryInterface,
   .AddRef = heapconf_AddRef,
   .Release = heapconf_Release,
+  .SetAbortProc = heapconf_SetAbortProc,
   .GetActiveDirtyRatio = heapconf_GetActiveDirtyRatio,
   .SetActiveDirtyRatio = heapconf_SetActiveDirtyRatio
 };
@@ -567,26 +590,26 @@ static const SEG_RODATA struct IHeapConfigurationVTable vtblHeapConfiguration =
  *          for the heap.
  * - pfnFree = Pointer to a function called as the last stage of releasing the heap, which frees the
  *             "prhd" block.  May be NULL.
- * - pfnAbort = Pointer to a function called when there's a serious error in the heap.  May be NULL.
- * - pvAbortArg = Argument passed to the pfnAbort function when it's called.  May be NULL.
+ * - uiFlags = Flag bits for the heap.
+ * - nChunkBits = Number of "bits" in a memory chunk that gets allocated.
  * - pChunkAllocator = Pointer to the IChunkAllocator interface used by the heap to allocate chunks of memory
  *                     for carving up by the heap.
  * - pMutexFactory = Pointer to the IMutexFactory interface used to allocate IMutex objects.
- * - nChunkBits = Number of "bits" in a memory chunk that gets allocated.
  * - ppHeap = Pointer location that will receive a pointer to the heap's IMalloc interface.
  *
  * Returns:
  * Standard HRESULT success/failure.
  */
-HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT pfnAbort, PVOID pvAbortArg,
-		   IChunkAllocator *pChunkAllocator, IMutexFactory *pMutexFactory, UINT32 nChunkBits,
-		   IMalloc **ppHeap)
+HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, UINT32 uiFlags, UINT32 nChunkBits, 
+		   IChunkAllocator *pChunkAllocator, IMutexFactory *pMutexFactory, IMalloc **ppHeap)
 {
   PHEAPDATA phd;   /* pointer to actual heap data */
   HRESULT hr;      /* HRESULT of intermediate operations */
 
   if (sizeof(RAWHEAPDATA) < sizeof(HEAPDATA))
     return MEMMGR_E_BADHEAPDATASIZE;  /* bogus size of raw heap data */
+  if (uiFlags & ~PHDFLAGS_INIT)
+    return E_INVALIDARG;   /* invalid flags */
   if (!prhd || !pChunkAllocator || !ppHeap)
     return E_POINTER;      /* invalid pointers */
 
@@ -597,10 +620,8 @@ HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT p
   phd->cpContainerInterface.pVTable = &vtblConnectionPointContainer;
   phd->heapConfInterface.pVTable = &vtblHeapConfiguration;
   phd->uiRefCount = 1;
-  phd->uiFlags = 0;
+  phd->uiFlags = uiFlags | PHDFLAGS_PROFILE_ACTIVE;
   phd->pfnFreeRawHeapData = pfnFree;
-  phd->pfnAbort = pfnAbort;
-  phd->pvAbortArg = pvAbortArg;
   phd->nChunkBits = nChunkBits;
   phd->szChunk = 1 << nChunkBits;
   if (phd->szChunk < SYS_PAGE_SIZE)

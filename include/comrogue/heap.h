@@ -47,11 +47,10 @@
 
 typedef struct tagRAWHEAPDATA
 {
-  UINT32 opaque[32];             /* opaque data, do not modify */
+  UINT32 opaque[128];             /* opaque data, do not modify */
 } RAWHEAPDATA, *PRAWHEAPDATA;
 
 typedef void (*PFNRAWHEAPDATAFREE)(PRAWHEAPDATA); /* function that optionally frees the heap data */
-typedef void (*PFNHEAPABORT)(PVOID);              /* function called to abort on serious error */
 
 /*--------------------
  * External functions
@@ -60,10 +59,17 @@ typedef void (*PFNHEAPABORT)(PVOID);              /* function called to abort on
 
 #define STD_CHUNK_BITS  22     /* standard number of bits in a memory chunk - yields 4Mb chunks */
 
+/* Flag definitions */
+#define PHDFLAGS_REDZONE   0x00000001U             /* use red zones? */
+#define PHDFLAGS_JUNKFILL  0x00000002U             /* fill junk in heap? */
+#define PHDFLAGS_ZEROFILL  0x00000004U             /* zero-fill allocations? */
+#define PHDFLAGS_NOTCACHE  0x00000008U             /* thread cache disabled? */
+#define PHDFLAGS_PROFILE   0x00000010U             /* profiling enabled? */
+
 CDECL_BEGIN
 
-extern HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, PFNHEAPABORT pfnAbort, PVOID pvAbortArg,
-			  IChunkAllocator *pChunkAllocator, IMutexFactory *pMutexFactory, UINT32 nChunkBits,
+extern HRESULT HeapCreate(PRAWHEAPDATA prhd, PFNRAWHEAPDATAFREE pfnFree, UINT32 uiFlags, UINT32 nChunkBits, 
+			  IChunkAllocator *pChunkAllocator, IMutexFactory *pMutexFactory,
 			  IMalloc **ppHeap);
 
 CDECL_END

@@ -342,9 +342,6 @@ struct tagARENA
  *----------------------------------
  */
 
-#define PHDFLAGS_REDZONE   0x00000001U             /* use red zones? */
-#define PHDFLAGS_JUNKFILL  0x00000002U             /* fill junk in heap? */
-
 typedef struct tagHEAPDATA {
   IMalloc mallocInterface;                         /* pointer to IMalloc interface - MUST BE FIRST! */
   IConnectionPointContainer cpContainerInterface;  /* pointer to IConnectionPointContainer interface */
