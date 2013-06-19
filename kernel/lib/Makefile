@@ -33,8 +33,8 @@ CRBASEDIR := $(abspath ../..)
 include $(CRBASEDIR)/armcompile.mk
 
 LIB_OBJS = divide.o qdivrem.o heap_toplevel.o heap_arena.o heap_base.o heap_bitmap.o heap_chunks.o heap_rtree.o \
-	   heap_utils.o intlib.o objhelp.o objhelp_enumconn.o objhelp_enumgeneric.o objhelp_fixedcp.o rbtree.o \
-	   str.o strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
+	   heap_tcache.o heap_utils.o intlib.o objhelp.o objhelp_enumconn.o objhelp_enumgeneric.o objhelp_fixedcp.o \
+	   rbtree.o str.o strcopymem.o strcomparemem.o strsetmem.o lib_guids.o
 
 all:	kernel-lib.o
 

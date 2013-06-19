@@ -50,6 +50,23 @@
 
 #define PHDFLAGS_INIT (PHDFLAGS_REDZONE|PHDFLAGS_JUNKFILL|PHDFLAGS_ZEROFILL|PHDFLAGS_NOTCACHE|PHDFLAGS_PROFILE)
 
+/*------------------------------
+ * Top-level internal functions
+ *------------------------------
+ */
+
+PARENA _HeapChooseArenaHard(PHEAPDATA phd)
+{
+  return NULL; /* TODO */
+}
+
+PARENA _HeapChooseArena(PHEAPDATA phd, PARENA parena)
+{
+  if (parena)
+    return parena;
+  return NULL; /* TODO */
+}
+
 /*------------------------
  * IMalloc implementation
  *------------------------

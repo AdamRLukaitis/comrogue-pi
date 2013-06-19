@@ -48,6 +48,7 @@
 #include <comrogue/stream.h>
 #include <comrogue/mutex.h>
 #include <comrogue/heap.h>
+#include <comrogue/threadlocal.h>
 #include <comrogue/objhelp.h>
 #include <comrogue/internals/dlist.h>
 #include <comrogue/internals/rbtree.h>
@@ -182,11 +183,32 @@ typedef const BITMAPINFO *PCBITMAPINFO;
  *---------------------------------
  */
 
+#define TCACHE_NSLOTS_SMALL_MAX     200     /* max cache slots per small bin */
+#define TCACHE_NSLOTS_LARGE         20      /* cache slots for large classes */
+#define LG_TCACHE_MAXCLASS_DEFAULT  15      /* log2 of max class */
+#define TCACHE_GC_SWEEP             8192    /* number of allocations between full GC sweeps */
+/* number of allocations between incremental GC sweeps */
+#define TCACHE_GC_INCR  ((TCACHE_GC_SWEEP / NBINS) + ((TCACHE_GC_SWEEP / NBINS == 0) ? 0 : 1))
+
+/* enable status */
+typedef enum tagTCACHE_ENABLE
+{
+  TCACHE_DISABLED = FALSE,
+  TCACHE_ENABLED = TRUE,
+  TCACHE_ENABLE_DEFAULT = 2
+} TCACHE_ENABLE;
+
 /* statistics per cache bin */
 typedef struct tagTCACHEBINSTATS
 {
   UINT64 nRequests;                             /* number of requests in this particular bin */
 } TCACHEBINSTATS, *PTCACHEBINSTATS;
+
+/* read-only info stored with each element of bins array */
+typedef struct tagTCACHEBININFO
+{
+  UINT32 nCachedMax;                            /* upper limit on bin.nCached */
+} TCACHEBININFO, *PTCACHEBININFO;
 
 /* single bin of the cache */
 typedef struct tagTCACHEBIN
@@ -210,6 +232,12 @@ typedef struct tagTCACHE
   UINT32 ndxNextGCBin;                          /* next bin to be GC'd */
   TCACHEBIN aBins[0];                           /* cache bins (dynamically sized) */
 } TCACHE, *PTCACHE;
+
+/* state values encoded as small non-NULL pointers */
+#define TCACHE_STATE_DISABLED      ((PTCACHE)(UINT_PTR)1)
+#define TCACHE_STATE_REINCARNATED  ((PTCACHE)(UINT_PTR)2)
+#define TCACHE_STATE_PURGATORY     ((PTCACHE)(UINT_PTR)3)
+#define TCACHE_STATE_MAX           TCACHE_STATE_PURGATORY
 
 /*------------------------
  * Arena data definitions
@@ -373,6 +401,13 @@ typedef struct tagHEAPDATA {
   PEXTENT_NODE pexnBaseNodes;                      /* pointer to base nodes */
   SIZE_T cpgMapBias;                               /* number of header pages for arena chunks */
   SIZE_T szArenaMaxClass;                          /* maximum size class for arenas */
+  SSIZE_T nTCacheMaxClassBits;                     /* bits in thread cache max class size */
+  PTCACHEBININFO ptcbi;                            /* pointer to thread cache bin info */
+  SIZE_T nHBins;                                   /* number of thread cache bins */
+  SIZE_T cbTCacheMaxClass;                         /* max cached size class */
+  UINT32 nStackElems;                              /* number of stack elements per tcache */
+  IThreadLocal *pthrlTCache;                       /* thread-local tcache value */
+  IThreadLocal *pthrlTCacheEnable;                 /* thread-local tcache enable value */
   ARENABININFO aArenaBinInfo[NBINS];               /* array of arena bin information */
 } HEAPDATA, *PHEAPDATA;
 
@@ -543,6 +578,50 @@ extern void _HeapArenaDAlloc(PHEAPDATA phd, PARENA pArena, PARENACHUNK pChunk, P
 CDECL_END
 
 #define SMALL_SIZE2BIN(s)  (abSmallSize2Bin[(s - 1) >> LG_TINY_MIN])
+
+/*------------------------------
+ * Thread-level cache functions
+ *------------------------------
+ */
+
+CDECL_BEGIN
+
+extern void _HeapTCacheEvent(PHEAPDATA phd, PTCACHE ptcache);
+extern void _HeapTCacheFlush(PHEAPDATA phd);
+extern BOOL _HeapTCacheIsEnabled(PHEAPDATA phd);
+extern PTCACHE _HeapTCacheGet(PHEAPDATA phd, BOOL fCreate);
+extern void _HeapTCacheSetEnabled(PHEAPDATA phd, BOOL fEnabled);
+extern PVOID _HeapTCacheAllocEasy(PHEAPDATA phd, PTCACHEBIN ptbin);
+extern PVOID _HeapTCacheAllocSmall(PHEAPDATA phd, PTCACHE ptcache, SIZE_T sz, BOOL fZero);
+extern PVOID _HeapTCacheAllocLarge(PHEAPDATA phd, PTCACHE ptcache, SIZE_T sz, BOOL fZero);
+extern void _HeapTCacheDAllocSmall(PHEAPDATA phd, PTCACHE ptcache, PVOID pv, SIZE_T ndxBin);
+extern void _HeapTCacheDAllocLarge(PHEAPDATA phd, PTCACHE ptcache, PVOID pv, SIZE_T sz);
+extern SIZE_T _HeapTCacheSAlloc(PHEAPDATA phd, PCVOID pv);
+extern void _HeapTCacheEventHard(PHEAPDATA phd, PTCACHE ptcache);
+extern PVOID _HeapTCacheAllocSmallHard(PHEAPDATA phd, PTCACHE ptcache, PTCACHEBIN ptbin, SIZE_T ndxBin);
+extern void _HeapTCacheBinFlushSmall(PHEAPDATA phd, PTCACHEBIN ptbin, SIZE_T ndxBin, UINT32 nRem, PTCACHE ptcache);
+extern void _HeapTCacheBinFlushLarge(PHEAPDATA phd, PTCACHEBIN ptbin, SIZE_T ndxBin, UINT32 nRem, PTCACHE ptcache);
+extern void _HeapTCacheArenaAssociate(PHEAPDATA phd, PTCACHE ptcache, PARENA pArena);
+extern void _HeapTCacheArenaDisassociate(PHEAPDATA phd, PTCACHE ptcache);
+extern PTCACHE _HeapTCacheCreate(PHEAPDATA phd, PARENA pArena);
+extern void _HeapTCacheDestroy(PHEAPDATA phd, PTCACHE ptcache);
+extern void _HeapTCacheStatsMerge(PHEAPDATA phd, PTCACHE ptcache, PARENA pArena);
+extern HRESULT _HeapTCacheSetup(PHEAPDATA phd, IThreadLocalFactory *pthrlf);
+extern void _HeapTCacheShutdown(PHEAPDATA phd);
+
+CDECL_END
+
+/*------------------------------
+ * Top-level internal functions
+ *------------------------------
+ */
+
+CDECL_BEGIN
+
+extern PARENA _HeapChooseArenaHard(PHEAPDATA phd);
+extern PARENA _HeapChooseArena(PHEAPDATA phd, PARENA parena);
+
+CDECL_END
 
 #endif /* __ASM__ */
 

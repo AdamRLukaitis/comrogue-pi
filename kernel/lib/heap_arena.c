@@ -546,14 +546,61 @@ SIZE_T _HeapArenaPtrSmallBinIndGet(PHEAPDATA phd, PCVOID pv, SIZE_T szMapBits)
  */
 SIZE_T _HeapArenaBinIndex(PHEAPDATA phd, PARENA pArena, PARENABIN pBin)
 {
-  SIZE_T ndxBin = pBin - pArena->aBins;
+  SIZE_T ndxBin = pBin - pArena->aBins;  /* return from this function */
   _H_ASSERT(phd, ndxBin < NBINS);
   return ndxBin;
 }
 
 UINT32 _HeapArenaRunRegInd(PHEAPDATA phd, PARENARUN pRun, PARENABININFO pBinInfo, PCVOID pv)
 {
-  return 0; /* TODO */
+  UINT32 ofsDiff;        /* offset between pointer and start of run */
+  SIZE_T cbInterval;     /* interval between regions */
+  UINT32 nShift;         /* shift for bit scaling */
+  UINT32 nRegionIndex;   /* region index - return from this function */
+
+  /* Don't free a pointer lower than Region 0. */
+  _H_ASSERT(phd, (UINT_PTR)pv >= ((UINT_PTR)pRun + (UINT_PTR)(pBinInfo->ofsRegion0)));
+
+  ofsDiff = (UINT32)((UINT_PTR)pv - (UINT_PTR)pRun - pBinInfo->ofsRegion0);
+
+  /* rescale diff and interval by powers of two */
+  cbInterval = pBinInfo->cbInterval;
+  nShift = IntFirstSet(cbInterval) - 1;
+  ofsDiff >>= nShift;
+  cbInterval >>= nShift;
+
+  if (cbInterval == 1)
+  {
+    nRegionIndex = ofsDiff;  /* divisor was a power of 2 */
+  }
+  else
+  { /* compute ofsDiff / cbInterval by using multiply and right-shift with a lookup table */
+#define SIZE_INV_SHIFT   ((sizeof(UINT32) << 3) - LG_RUN_MAXREGS)
+#define SIZE_INV(s)      (((1U << SIZE_INV_SHIFT) / (s)) + 1)
+    static const UINT32 SEG_RODATA acbIntervalInvs[] =
+    {
+      SIZE_INV(3),
+      SIZE_INV(4), SIZE_INV(5), SIZE_INV(6), SIZE_INV(7),
+      SIZE_INV(8), SIZE_INV(9), SIZE_INV(10), SIZE_INV(11),
+      SIZE_INV(12), SIZE_INV(13), SIZE_INV(14), SIZE_INV(15),
+      SIZE_INV(16), SIZE_INV(17), SIZE_INV(18), SIZE_INV(19),
+      SIZE_INV(20), SIZE_INV(21), SIZE_INV(22), SIZE_INV(23),
+      SIZE_INV(24), SIZE_INV(25), SIZE_INV(26), SIZE_INV(27),
+      SIZE_INV(28), SIZE_INV(29), SIZE_INV(30), SIZE_INV(31)
+    };
+
+    if (cbInterval <= ((sizeof(acbIntervalInvs) / sizeof(UINT32)) + 2))
+      nRegionIndex = (ofsDiff * acbIntervalInvs[cbInterval - 3]) >> SIZE_INV_SHIFT;
+    else
+      nRegionIndex = ofsDiff / cbInterval;
+#undef SIZE_INV
+#undef SIZE_INV_SHIFT
+  }
+
+  _H_ASSERT(phd, ofsDiff == nRegionIndex * cbInterval);
+  _H_ASSERT(phd, nRegionIndex < pBinInfo->nRegions);
+
+  return nRegionIndex;
 }
 
 PVOID _HeapArenaMalloc(PHEAPDATA phd, PARENA pArena, SIZE_T sz, BOOL fZero, BOOL fTryTCache)
